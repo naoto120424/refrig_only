@@ -1,2 +1,4 @@
-schedule.py
-confirm.py
+/schedule.py
+/confirm.py
+
+*.pyc
