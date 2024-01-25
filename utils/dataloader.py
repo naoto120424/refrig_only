@@ -40,22 +40,23 @@ def load_data(cfg, in_len=20, out_len=20, debug=False):
     Specdata = []
     Ydata = []
     TimeData = []
+    GTData = []
 
     for file in tqdm(csv_files):
         csv_data = pd.read_csv(os.path.join(cfg.DATA_PATH, file), skiprows=1).values
-        single_data = decimate(csv_data)[:, 1:]
+        single_data = decimate(csv_data)[:, 1:]  # shape(3299, 62)
         # single_data = csv_data[:, 1:]  # No decimate function
-        # print(single_data.shape) # (3299, 62)
         spec_data = single_data[:, : cfg.NUM_CONTROL_FEATURES]
         output_data = single_data[:, cfg.NUM_CONTROL_FEATURES :]
         input_time_list = []
         spec_list = []
         gt_list = []
         t_list = []
+        
         if single_data.shape[0] != 3299:
             del_files.append(file)
         else:
-            for t in range(single_data.shape[0] - in_len - out_len):
+            for t in range(single_data.shape[0] - in_len - out_len + 1):
                 input_time_list.append(single_data[t : t + in_len])
                 spec_list.append(spec_data[t + in_len: t + in_len + out_len])
                 gt_list.append(output_data[t + in_len: t + in_len + out_len])
@@ -64,6 +65,7 @@ def load_data(cfg, in_len=20, out_len=20, debug=False):
             Specdata.append(np.array(spec_list))
             Ydata.append(np.array(gt_list))
             TimeData.append(np.array(t_list))
+            GTData.append(single_data[:, -cfg.NUM_PRED_FEATURES:])
             # print(np.array(input_time_list).shape)
             # print(np.array(spec_list).shape)
             # print(np.array(gt_list).shape)
@@ -73,26 +75,22 @@ def load_data(cfg, in_len=20, out_len=20, debug=False):
     data["spec"] = np.array(Specdata)       # shape(case_num, 3299-(in_len+out_len), out_len, num_control_features)
     data["gt"] = np.array(Ydata)            # shape(case_num, 3299-(in_len+out_len), out_len, num_pred_features)
     data["timedata"] = np.array(TimeData)   # shape(case_num, 3299-(in_len+out_len), out_len)
+    data["gt_data"] = np.array(GTData)      # shape(case_num, 3299, num_all_features)
     # print('data["inp"]', data["inp"].shape) 
     # print('data["spec"]', data["spec"].shape)
     # print('data["gt"]', data["gt"].shape)
     # print('data["timedata"]', data['timedata'].shape)
+    # print('data["gt_data"]', data["gt_data"].shape)
 
     data["feature_name"] = list(map(lambda x: x.split(".")[0], pd.read_csv(os.path.join(cfg.DATA_PATH, csv_files[0]), skiprows=0, dtype=str).columns))
     data["feature_unit"] = list(map(lambda x: x.split(".")[0], pd.read_csv(os.path.join(cfg.DATA_PATH, csv_files[0]), skiprows=1, dtype=str).columns))
     data["feature_name"][7] = "ChillerInT_spec"
     data["feature_name"][38] = "ChillerInT"
-    # print("feature_name", data['feature_name'])
-    # print("feature_unit", data['feature_unit'])
     
     data["pred_name"] = data["feature_name"][-cfg.NUM_PRED_FEATURES:]
     data["pred_unit"] = data["feature_unit"][-cfg.NUM_PRED_FEATURES:]
     data["target_name"] = data["feature_name"][-cfg.NUM_TARGET_FEATURES:]
     data["target_unit"] = data["feature_unit"][-cfg.NUM_TARGET_FEATURES:]
-    # print("pred_name", data['pred_name'])
-    # print("pred_unit", data['pred_unit'])
-    # print("target_name", data['target_name'])
-    # print("target_unit", data['target_unit'])
 
     print("----------------------------------------------")
 
