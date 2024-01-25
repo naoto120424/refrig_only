@@ -124,12 +124,12 @@ class BaseTransformer(nn.Module):
         self.generator = nn.Sequential(nn.LayerNorm(args.d_model), nn.Linear(args.d_model, self.num_pred_features))
 
     def forward(self, input, spec):
-        print(f"first: {input.shape}, {spec.shape}")
+        # print(f"first: {input.shape}, {spec.shape}")
         x = self.input_embedding(input)
         x += self.positional_embedding(x)
 
         spec = self.spec_embedding(spec)
-        print(x.shape, spec.shape)
+        # print("after embedding: ", x.shape, spec.shape)
 
         x = torch.cat((x, spec), dim=1)
 
