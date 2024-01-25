@@ -3,5 +3,4 @@
 /model/DeepONet/
 /model/linear/
 
-*.pyc
 __pycache__
