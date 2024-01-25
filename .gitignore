@@ -1,4 +1,7 @@
 /schedule.py
 /confirm.py
+/model/DeepONet/
+/model/linear/
 
 *.pyc
+__pycache__
