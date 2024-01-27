@@ -116,25 +116,36 @@ class BaseTransformer(nn.Module):
         self.input_embedding = nn.Linear(self.num_all_features, args.d_model)
         self.positional_embedding = PositionalEmbedding(args.d_model)  # 絶対位置エンコーディング
         self.spec_embedding = SpecEmbedding(args.d_model, self.num_control_features)
+        
+        self.pred_token = nn.Parameter(torch.randn(1, self.out_len, args.d_model))
 
         self.dropout = nn.Dropout(args.dropout)
 
         self.transformer = Transformer(args)
+        
+        self.generators = nn.ModuleList([])
+        for _ in range(self.out_len):
+            self.generators.append(
+                nn.Sequential(nn.LayerNorm(args.d_model), nn.Linear(args.d_model, self.num_pred_features))
+            )
 
-        self.generator = nn.Sequential(nn.LayerNorm(args.d_model), nn.Linear(args.d_model, self.num_pred_features))
+        # self.generator = nn.Sequential(nn.LayerNorm(args.d_model), nn.Linear(args.d_model, self.num_pred_features))
 
     def forward(self, input, spec):
-        # print(f"first: {input.shape}, {spec.shape}")
         x = self.input_embedding(input)
-        x += self.positional_embedding(x)
-
         spec = self.spec_embedding(spec)
-        # print("after embedding: ", x.shape, spec.shape)
-
         x = torch.cat((x, spec), dim=1)
+        
+        x += self.positional_embedding(x)
 
         x = self.dropout(x)
         x, attn = self.transformer(x)
         
-        x = self.generator(x[:, :self.out_len])
-        return x, attn
+        x = x.mean(dim=1)
+        
+        # x = self.generator(x[:, :self.out_len])
+        x_final = torch.zeros(input.shape[0], self.out_len, self.num_pred_features).to(input.device)
+        for i, generator in enumerate(self.generators):
+            x_final[:, i] = generator(x)
+        
+        return x_final, attn
