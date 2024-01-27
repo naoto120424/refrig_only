@@ -61,6 +61,7 @@ def main():
     mlflow.log_param("patience", args.patience)
     mlflow.log_param("delta", args.delta)
     mlflow.log_param("in_len", args.in_len)
+    mlflow.log_param("out_len", args.out_len)
     mlflow.log_param("d_model", args.d_model)
     mlflow.log_param("e_layers", args.e_layers)
     mlflow.log_param("dropout", args.dropout)
@@ -232,13 +233,8 @@ def main():
             for i in range(np.array(gt_output_data).shape[1]):  # scaling ground truth data for visualization
                 scaling_gt_data[:, i] = (gt_output_data[:, i] - mean_list[i+CFG.NUM_CONTROL_FEATURES+1]) / std_list[i+CFG.NUM_CONTROL_FEATURES+1]
 
-            print(pred_data.shape, gt_output_data.shape)
-            # pred_data = pred_data[:gt_output_data.shape[0]]
-            # scaling_pred_data = scaling_pred_data[:gt_output_data.shape[0]]
             gt_output_data = gt_output_data[:pred_data.shape[0]]
             scaling_gt_data = scaling_gt_data[:pred_data.shape[0]]
-            
-            print(pred_data.shape, gt_output_data.shape)
 
             eva.evaluation(args.in_len, gt_output_data, pred_data, case_name)
             eva.visualization(gt_output_data, pred_data, case_name, CFG.RESULT_PATH)
