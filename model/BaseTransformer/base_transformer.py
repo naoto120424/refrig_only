@@ -114,13 +114,10 @@ class BaseTransformer(nn.Module):
         self.out_len = args.out_len
 
         self.input_embedding = nn.Linear(self.num_all_features, args.d_model)
-        self.positional_embedding = PositionalEmbedding(args.d_model)  # 絶対位置エンコーディング
         self.spec_embedding = SpecEmbedding(args.d_model, self.num_control_features)
-        
-        self.pred_token = nn.Parameter(torch.randn(1, self.out_len, args.d_model))
+        self.positional_embedding = PositionalEmbedding(args.d_model)  # 絶対位置エンコーディング
 
         self.dropout = nn.Dropout(args.dropout)
-
         self.transformer = Transformer(args)
         
         self.generators = nn.ModuleList([])
@@ -128,8 +125,6 @@ class BaseTransformer(nn.Module):
             self.generators.append(
                 nn.Sequential(nn.LayerNorm(args.d_model), nn.Linear(args.d_model, self.num_pred_features))
             )
-
-        # self.generator = nn.Sequential(nn.LayerNorm(args.d_model), nn.Linear(args.d_model, self.num_pred_features))
 
     def forward(self, input, spec):
         x = self.input_embedding(input)
