@@ -84,7 +84,7 @@ class Eva():
         # For PowerPoint Slide
         grf_row = 3
         grf_col = 3
-        fig = plt.figure()
+        fig = plt.figure(figsize=(12, 8))
         ax_list = []
         for j in range(grf_row):
             for i in range(grf_col):

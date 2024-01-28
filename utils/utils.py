@@ -20,6 +20,7 @@ model_list = {
     "LSTM",
     "BaseTransformer",
     "BaseTransformer_pred_token",
+    "BaseTransformer_decoder",
     "BaseTransformer_sensor_first",
     "BaseTransformer_3types_aete",
     "BaseTransformer_3types_AgentAwareAttention",
@@ -66,8 +67,10 @@ def modelDecision(args, cfg):
     if "BaseTransformer" in args.model:
         if args.model == "BaseTransformer":
             from model.BaseTransformer.base_transformer import BaseTransformer
-        if args.model == "BaseTransformer_pred_token":
+        elif args.model == "BaseTransformer_pred_token":
             from model.BaseTransformer.base_transformer_pred_token import BaseTransformer
+        elif args.model == "BaseTransformer_decoder":
+            from model.BaseTransformer.BaseTransformer_decoder import BaseTransformer
         elif args.model == "BaseTransformer_sensor_first":
             from model.BaseTransformer.base_transformer_sensor_first import BaseTransformer
         elif args.model == "BaseTransformer_3types_aete":

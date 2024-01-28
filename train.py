@@ -216,9 +216,9 @@ def main():
                 new_scaling_input_data = np.concatenate([scaling_spec_data[i * args.out_len], scaling_pred_data], axis=1)
                 scaling_input_data = np.concatenate([scaling_input_data, new_scaling_input_data], axis=0)
 
-                if "BaseTransformer" in args.model:
-                    attn = attn.detach().to("cpu").numpy().copy()
-                    attn_all.append(attn)
+                # if "BaseTransformer" in args.model:
+                #     attn = attn.detach().to("cpu").numpy().copy()
+                #     attn_all.append(attn)
 
             end_time = time.perf_counter()
             predict_time_list.append(end_time - start_time)
@@ -239,7 +239,7 @@ def main():
             eva.evaluation(args.in_len, gt_output_data, pred_data, case_name)
             eva.visualization(gt_output_data, pred_data, case_name, CFG.RESULT_PATH)
             eva.visualization(scaling_gt_data, scaling_pred_data, case_name, CFG.RESULT_PATH, is_normalized=True)
-            eva.attention_visualization(args, attn_all, CFG.RESULT_PATH, case_name) if "BaseTransformer" in args.model else None
+            # eva.attention_visualization(args, attn_all, CFG.RESULT_PATH, case_name) if "BaseTransformer" in args.model else None
 
     eva.save_evaluation(CFG.RESULT_PATH)
     mlflow.log_metric(f"predict time mean", np.mean(predict_time_list))
