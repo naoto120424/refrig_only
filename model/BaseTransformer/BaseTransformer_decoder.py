@@ -83,9 +83,10 @@ class BaseTransformer(nn.Module):
         
         for _ in range(self.out_len):
             y_embed = self.y_embedding(y)
-            x_dec = self.decoder(x, y_embed)
+            y_embed += self.positional_embedding(y_embed)
+            x_dec = self.decoder(tgt=y_embed, memory=x)
             x_dec = x_dec.mean(dim=1)
             x_dec = self.predictor(x_dec).unsqueeze(1)
             y = torch.cat((y, x_dec), dim=1)
         
-        return y[:, 1:], None
+        return y[:, -self.out_len:], None
