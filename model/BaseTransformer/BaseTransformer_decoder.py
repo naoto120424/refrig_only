@@ -67,7 +67,7 @@ class BaseTransformer(nn.Module):
             decoder_layer=decoder_layers,
             num_layers=args.e_layers
         )
-        self.predictor = nn.Linear(args.d_model, self.num_pred_features)
+        self.predictor = nn.Sequential(nn.LayerNorm(args.d_model), nn.Linear(args.d_model, self.num_pred_features))
         
     def forward(self, inp, spec):
         x = self.input_embedding(inp)
