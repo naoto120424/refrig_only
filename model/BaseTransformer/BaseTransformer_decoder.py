@@ -4,9 +4,9 @@ import math
 from model.BaseTransformer.spec_embed import SpecEmbedding
 
 # classes
-class PositionalEmbedding(nn.Module):
+class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=5000):
-        super(PositionalEmbedding, self).__init__()
+        super(PositionalEncoding, self).__init__()
         # Compute the positional encodings once in log space.
         pe = torch.zeros(max_len, d_model).float()
         pe.requires_grad = False
@@ -36,7 +36,7 @@ class BaseTransformer(nn.Module):
 
         self.input_embedding = nn.Linear(self.num_all_features, args.d_model)
         self.spec_embedding = SpecEmbedding(args.d_model, self.num_control_features)
-        self.positional_embedding = PositionalEmbedding(args.d_model)  # 絶対位置エンコーディング
+        self.positional_encoding = PositionalEncoding(args.d_model)  # 絶対位置エンコーディング
         
         self.dropout = nn.Dropout(args.dropout)
         
@@ -71,12 +71,12 @@ class BaseTransformer(nn.Module):
         
     def forward(self, inp, spec, tgt):
         x = self.input_embedding(inp)
-        x += self.positional_embedding(x)
+        x += self.positional_encoding(x)
         
         tgt = torch.cat((spec, tgt), dim=2)[:, :-1, :]
         y = torch.cat((inp[:, -1:, :], tgt), dim=1)
         y = self.y_embedding(y)
-        y += self.positional_embedding(y)
+        y += self.positional_encoding(y)
         
         mask_src, mask_tgt = self.create_mask(x, y)
         
@@ -103,10 +103,10 @@ class BaseTransformer(nn.Module):
         return mask
         
     def encode(self, src, mask_src):
-        return self.encoder(self.positional_embedding(self.input_embedding(src)), mask_src)
+        return self.encoder(self.positional_encoding(self.input_embedding(src)), mask_src)
 
     def decode(self, tgt, memory, mask_tgt):
-        return self.decoder(self.positional_embedding(self.y_embedding(tgt)), memory, mask_tgt)
+        return self.decoder(self.positional_encoding(self.y_embedding(tgt)), memory, mask_tgt)
     
     def predict_func(self, inp, spec):
         seq_len_src = self.in_len
