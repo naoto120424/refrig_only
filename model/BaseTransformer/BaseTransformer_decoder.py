@@ -53,7 +53,7 @@ class BaseTransformer(nn.Module):
             num_layers=args.e_layers
         )
         
-        self.y_embedding = nn.Linear(self.num_pred_features, args.d_model)
+        self.y_embedding = nn.Linear(self.num_all_features, args.d_model)
         
         decoder_layers = nn.TransformerDecoderLayer(
             d_model = args.d_model,
@@ -69,24 +69,61 @@ class BaseTransformer(nn.Module):
         )
         self.predictor = nn.Sequential(nn.LayerNorm(args.d_model), nn.Linear(args.d_model, self.num_pred_features))
         
-    def forward(self, inp, spec):
+    def forward(self, inp, spec, tgt):
         x = self.input_embedding(inp)
-        spec = self.spec_embedding(spec)
-        x = torch.cat((x, spec), dim=1)
-        
         x += self.positional_embedding(x)
+        
+        tgt = torch.cat((spec, tgt), dim=2)[:, :-1, :]
+        y = torch.cat((inp[:, -1:, :], tgt), dim=1)
+        y = self.y_embedding(y)
+        y += self.positional_embedding(y)
+        
+        mask_src, mask_tgt = self.create_mask(x, y)
+        
+        x = self.encoder(x, mask_src)
+        
+        outs = self.decoder(y, x, mask_tgt)
+        outs = self.predictor(self.dropout(outs))
+        
+        return outs, None
+    
+    def create_mask(self, src, tgt):
+    
+        seq_len_src = src.shape[1]
+        seq_len_tgt = tgt.shape[1]
 
-        x = self.dropout(x)
-        x = self.encoder(x)
+        mask_tgt = self.generate_square_subsequent_mask(seq_len_tgt).to(tgt.device)
+        mask_src = self.generate_square_subsequent_mask(seq_len_src).to(src.device)
+
+        return mask_src, mask_tgt
+
+
+    def generate_square_subsequent_mask(self, seq_len):
+        mask = torch.triu(torch.full((seq_len, seq_len), float('-inf')), diagonal=1)
+        return mask
         
-        y = inp[:, -1, -self.num_pred_features:].unsqueeze(1)
+    def encode(self, src, mask_src):
+        return self.encoder(self.positional_embedding(self.input_embedding(src)), mask_src)
+
+    def decode(self, tgt, memory, mask_tgt):
+        return self.decoder(self.positional_embedding(self.y_embedding(tgt)), memory, mask_tgt)
+    
+    def predict_func(self, inp, spec):
+        seq_len_src = self.in_len
+        mask_src = (torch.zeros(seq_len_src, seq_len_src)).type(torch.bool)
+        mask_src = mask_src.float().to(inp.device)
         
-        for _ in range(self.out_len):
-            y_embed = self.y_embedding(y)
-            y_embed += self.positional_embedding(y_embed)
-            x_dec = self.decoder(tgt=y_embed, memory=x)
-            x_dec = x_dec.mean(dim=1)
-            x_dec = self.predictor(x_dec).unsqueeze(1)
-            y = torch.cat((y, x_dec), dim=1)
+        memory = self.encode(inp, mask_src)
+        outputs = inp[:, -1:, :]
+        seq_len_tgt = self.out_len
         
-        return y[:, -self.out_len:], None
+        for i in range(seq_len_tgt):
+            mask_tgt = (self.generate_square_subsequent_mask(outputs.size(1))).to(inp.device)
+        
+            output = self.decode(outputs, memory, mask_tgt)
+            output = self.predictor(output)
+            
+            output = torch.cat([spec[:, :i+1], output], dim=2)
+            outputs = torch.cat([outputs, output[:, -1:, :]], dim=1)
+        
+        return outputs[:, 1:, -self.num_pred_features:], None
