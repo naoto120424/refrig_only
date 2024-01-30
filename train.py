@@ -119,8 +119,10 @@ def main():
             timedata = batch["timedata"].to(device)
             
             # train pred here
-            if (args.model == "Transformer") or ("Deep" in args.model):
+            if "Deep" in args.model:
                 pred, _ = model(inp, spec, timedata)
+            elif "decoder" in args.model:
+                pred, _ = model(inp, spec, gt)
             else:
                 pred, _ = model(inp, spec)  
 
@@ -143,10 +145,12 @@ def main():
                 timedata = batch["timedata"].to(device)
 
                 # validation pred here
-                if (args.model == "Transformer") or ("Deep" in args.model):
+                if "Deep" in args.model:
                     pred, _ = model(inp, spec, timedata)
+                elif "decoder" in args.model:
+                    pred, _ = model(inp, spec, gt)
                 else:
-                    pred, _ = model(inp, spec)
+                    pred, _ = model(inp, spec)  
 
                 test_error = torch.mean(torch.abs(gt - pred))
                 epoch_test_error += test_error.item() * inp.size(0)
@@ -208,8 +212,10 @@ def main():
                 gt = torch.from_numpy(scaling_gt_data[i * args.out_len].astype(np.float32)).clone().unsqueeze(0).to(device)
                 timedata = torch.from_numpy(scaling_time_data[i * args.out_len].astype(np.float32)).clone().unsqueeze(0).to(device)
 
-                if (args.model == "Transformer") or ("Deep" in args.model):
+                if "Deep" in args.model:
                     scaling_pred_data, attn = model(input, spec, timedata)  # test pred here
+                elif "decoder" in args.model:
+                    scaling_pred_data, attn = model.predict_func(input, spec)
                 else:
                     scaling_pred_data, attn = model(input, spec)  # test pred here
                 scaling_pred_data = scaling_pred_data.detach().to("cpu").numpy().copy()[0]
