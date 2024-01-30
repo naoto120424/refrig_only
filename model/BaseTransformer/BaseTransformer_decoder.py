@@ -38,8 +38,6 @@ class BaseTransformer(nn.Module):
         self.spec_embedding = SpecEmbedding(args.d_model, self.num_control_features)
         self.positional_encoding = PositionalEncoding(args.d_model)  # 絶対位置エンコーディング
         
-        self.dropout = nn.Dropout(args.dropout)
-        
         encoder_layers = nn.TransformerEncoderLayer(
             d_model=args.d_model,
             nhead=args.n_heads,
@@ -48,9 +46,11 @@ class BaseTransformer(nn.Module):
             activation='relu',
             batch_first=True,
         )
+        encoder_norm = nn.LayerNorm(args.d_model)
         self.encoder = nn.TransformerEncoder(
             encoder_layer=encoder_layers,
-            num_layers=args.e_layers
+            num_layers=args.e_layers,
+            norm=encoder_norm
         )
         
         self.y_embedding = nn.Linear(self.num_all_features, args.d_model)
@@ -63,18 +63,25 @@ class BaseTransformer(nn.Module):
             activation='relu',
             batch_first=True,
         )
+        decoder_norm = nn.LayerNorm(args.d_model)
         self.decoder = nn.TransformerDecoder(
             decoder_layer=decoder_layers,
-            num_layers=args.e_layers
+            num_layers=args.e_layers,
+            norm=decoder_norm
         )
-        self.predictor = nn.Sequential(nn.LayerNorm(args.d_model), nn.Linear(args.d_model, self.num_pred_features))
+        self.predictor = nn.Sequential(
+            nn.Dropout(args.dropout),
+            nn.LayerNorm(args.d_model),
+            nn.Linear(args.d_model, self.num_pred_features)
+        )
         
     def forward(self, inp, spec, tgt):
         x = self.input_embedding(inp)
         x += self.positional_encoding(x)
         
-        tgt = torch.cat((spec, tgt), dim=2)[:, :-1, :]
-        y = torch.cat((inp[:, -1:, :], tgt), dim=1)
+        tgt = torch.cat((spec, tgt), dim=2)
+        y = torch.cat((inp[:, -1:, :], tgt), dim=1)[:, :-1, :]
+        
         y = self.y_embedding(y)
         y += self.positional_encoding(y)
         
@@ -83,7 +90,7 @@ class BaseTransformer(nn.Module):
         x = self.encoder(x, mask_src)
         
         outs = self.decoder(y, x, mask_tgt)
-        outs = self.predictor(self.dropout(outs))
+        outs = self.predictor(outs)
         
         return outs, None
     
@@ -103,10 +110,16 @@ class BaseTransformer(nn.Module):
         return mask
         
     def encode(self, src, mask_src):
-        return self.encoder(self.positional_encoding(self.input_embedding(src)), mask_src)
+        src = self.input_embedding(src)
+        src += self.positional_encoding(src)
+        src = self.encoder(src, mask_src)
+        return src
 
     def decode(self, tgt, memory, mask_tgt):
-        return self.decoder(self.positional_encoding(self.y_embedding(tgt)), memory, mask_tgt)
+        tgt = self.y_embedding(tgt)
+        tgt += self.positional_encoding(tgt)
+        tgt = self.decoder(tgt, memory, mask_tgt)
+        return tgt
     
     def predict_func(self, inp, spec):
         seq_len_src = self.in_len
@@ -126,4 +139,4 @@ class BaseTransformer(nn.Module):
             output = torch.cat([spec[:, :i+1], output], dim=2)
             outputs = torch.cat([outputs, output[:, -1:, :]], dim=1)
         
-        return outputs[:, 1:, -self.num_pred_features:], None
+        return outputs[:, -self.out_len:, -self.num_pred_features:], None
