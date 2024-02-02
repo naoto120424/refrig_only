@@ -119,28 +119,26 @@ class BaseTransformer(nn.Module):
 
         self.dropout = nn.Dropout(args.dropout)
         self.transformer = Transformer(args)
-        
+
         self.generators = nn.ModuleList([])
         for _ in range(self.out_len):
-            self.generators.append(
-                nn.Sequential(nn.LayerNorm(args.d_model), nn.Linear(args.d_model, self.num_pred_features))
-            )
+            self.generators.append(nn.Sequential(nn.LayerNorm(args.d_model), nn.Linear(args.d_model, self.num_pred_features)))
 
     def forward(self, input, spec):
         x = self.input_embedding(input)
         spec = self.spec_embedding(spec)
         x = torch.cat((x, spec), dim=1)
-        
+
         x += self.positional_embedding(x)
 
         x = self.dropout(x)
         x, attn = self.transformer(x)
-        
+
         x = x.mean(dim=1)
-        
+
         # x = self.generator(x[:, :self.out_len])
         x_final = torch.zeros(input.shape[0], self.out_len, self.num_pred_features).to(input.device)
         for i, generator in enumerate(self.generators):
             x_final[:, i] = generator(x)
-        
+
         return x_final, attn

@@ -14,6 +14,7 @@ from utils.earlystopping import EarlyStopping
 
 from model.s4.s4d import S4D
 
+
 def main():
     """parser"""
     parser = argparse.ArgumentParser(description="Mazda Refrigerant Circuit Project Step3")
@@ -43,7 +44,7 @@ def main():
     parser.add_argument("--seg_len", type=int, default=3, help="(CrossFormer) segment length (L_seg)")
     parser.add_argument("--win_size", type=int, default=2, help="(CrossFormer) window size for segment merge")
     parser.add_argument("--factor", type=int, default=10, help="(CrossFormer) num of routers in Cross-Dimension Stage of TSA (c)")
-    
+
     parser.add_argument("--trunk_layers", type=int, default=3, help="(DeepOx) num of Trunk Net Layers")
     parser.add_argument("--trunk_d_model", type=int, default=256, help="(DeepOx) Trunk Net dimension")
 
@@ -83,8 +84,8 @@ def main():
     eva = Eva(data)
     device = deviceDecision()
 
-    train_index_list, test_index_list = train_test_split(np.arange(data_len), test_size=int(data_len*0.2))
-    train_index_list, val_index_list = train_test_split(train_index_list, test_size=int(data_len*0.1))
+    train_index_list, test_index_list = train_test_split(np.arange(data_len), test_size=int(data_len * 0.2))
+    train_index_list, val_index_list = train_test_split(train_index_list, test_size=int(data_len * 0.1))
 
     train_dataset, mean_list, std_list = create_dataset(CFG, data, train_index_list, csv_files, is_train=True)
     val_dataset, _, _ = create_dataset(CFG, data, val_index_list, csv_files, is_train=False, mean_list=mean_list, std_list=std_list)
@@ -117,14 +118,14 @@ def main():
             spec = batch["spec"].to(device)
             gt = batch["gt"].to(device)
             timedata = batch["timedata"].to(device)
-            
+
             # train pred here
             if "Deep" in args.model:
                 pred, _ = model(inp, spec, timedata)
             elif "decoder" in args.model:
                 pred, _ = model(inp, spec, gt)
             else:
-                pred, _ = model(inp, spec)  
+                pred, _ = model(inp, spec)
 
             loss = criterion(pred, gt)
             loss.backward()
@@ -150,7 +151,7 @@ def main():
                 elif "decoder" in args.model:
                     pred, _ = model(inp, spec, gt)
                 else:
-                    pred, _ = model(inp, spec)  
+                    pred, _ = model(inp, spec)
 
                 test_error = torch.mean(torch.abs(gt - pred))
                 epoch_test_error += test_error.item() * inp.size(0)
@@ -182,23 +183,23 @@ def main():
 
         for test_index in tqdm(test_index_list):
             case_name = f"case{str(test_index+1).zfill(4)}"
-            
-            inp_data = data["inp"][test_index]          # shape(3299-(in_len+out_len), in_len, num_all_features)
-            spec_data = data["spec"][test_index]        # shape(3299-(in_len+out_len), out_len, num_control_features)
-            gt_data = data["gt"][test_index]            # shape(3299-(in_len+out_len), out_len, num_pred_features)
-            time_data = data["timedata"][test_index]    # shape(3299-(in_len+out_len), out_len)
+
+            inp_data = data["inp"][test_index]  # shape(3299-(in_len+out_len), in_len, num_all_features)
+            spec_data = data["spec"][test_index]  # shape(3299-(in_len+out_len), out_len, num_control_features)
+            gt_data = data["gt"][test_index]  # shape(3299-(in_len+out_len), out_len, num_pred_features)
+            time_data = data["timedata"][test_index]  # shape(3299-(in_len+out_len), out_len)
             gt_output_data = data["gt_data"][test_index]
 
-            scaling_input_data = inp_data[0].copy()     # shape(in_len, num_all_features)
+            scaling_input_data = inp_data[0].copy()  # shape(in_len, num_all_features)
             scaling_spec_data = spec_data.copy()
             scaling_gt_data = gt_data.copy()
             scaling_time_data = time_data.copy()
             for i in range(scaling_input_data.shape[1]):  # input scaling
-                scaling_input_data[:, i] = (scaling_input_data[:, i] - mean_list[i+1]) / std_list[i+1]
+                scaling_input_data[:, i] = (scaling_input_data[:, i] - mean_list[i + 1]) / std_list[i + 1]
             for i in range(scaling_spec_data.shape[2]):  # spec scaling
-                scaling_spec_data[:, :, i] = (scaling_spec_data[:, :, i] - mean_list[i+1]) / std_list[i+1]
+                scaling_spec_data[:, :, i] = (scaling_spec_data[:, :, i] - mean_list[i + 1]) / std_list[i + 1]
             for i in range(scaling_gt_data.shape[2]):  # ground truth scaling
-                scaling_gt_data[:, :, i] = (scaling_gt_data[:, :, i] - mean_list[i+CFG.NUM_CONTROL_FEATURES+1]) / std_list[i+CFG.NUM_CONTROL_FEATURES+1]
+                scaling_gt_data[:, :, i] = (scaling_gt_data[:, :, i] - mean_list[i + CFG.NUM_CONTROL_FEATURES + 1]) / std_list[i + CFG.NUM_CONTROL_FEATURES + 1]
             for i in range(scaling_time_data.shape[1]):
                 scaling_time_data[:, i] = (scaling_time_data[:, i] - mean_list[0]) / std_list[0]
 
@@ -207,7 +208,7 @@ def main():
             start_time = time.perf_counter()
 
             for i in range((gt_output_data.shape[0] - args.in_len) // args.out_len):
-                input = torch.from_numpy(scaling_input_data[-args.in_len:].astype(np.float32)).clone().unsqueeze(0).to(device)
+                input = torch.from_numpy(scaling_input_data[-args.in_len :].astype(np.float32)).clone().unsqueeze(0).to(device)
                 spec = torch.from_numpy(scaling_spec_data[i * args.out_len].astype(np.float32)).clone().unsqueeze(0).to(device)
                 gt = torch.from_numpy(scaling_gt_data[i * args.out_len].astype(np.float32)).clone().unsqueeze(0).to(device)
                 timedata = torch.from_numpy(scaling_time_data[i * args.out_len].astype(np.float32)).clone().unsqueeze(0).to(device)
@@ -231,16 +232,16 @@ def main():
 
             pred_output_data = scaling_input_data.copy()
             for i in range(pred_output_data.shape[1]):  # undo scaling
-                pred_output_data[:, i] = pred_output_data[:, i] * std_list[i+1] + mean_list[i+1]
+                pred_output_data[:, i] = pred_output_data[:, i] * std_list[i + 1] + mean_list[i + 1]
             pred_data = pred_output_data[:, CFG.NUM_CONTROL_FEATURES :]
             scaling_pred_data = scaling_input_data[:, CFG.NUM_CONTROL_FEATURES :]
 
             scaling_gt_data = np.zeros(gt_output_data.shape)
             for i in range(np.array(gt_output_data).shape[1]):  # scaling ground truth data for visualization
-                scaling_gt_data[:, i] = (gt_output_data[:, i] - mean_list[i+CFG.NUM_CONTROL_FEATURES+1]) / std_list[i+CFG.NUM_CONTROL_FEATURES+1]
+                scaling_gt_data[:, i] = (gt_output_data[:, i] - mean_list[i + CFG.NUM_CONTROL_FEATURES + 1]) / std_list[i + CFG.NUM_CONTROL_FEATURES + 1]
 
-            gt_output_data = gt_output_data[:pred_data.shape[0]]
-            scaling_gt_data = scaling_gt_data[:pred_data.shape[0]]
+            gt_output_data = gt_output_data[: pred_data.shape[0]]
+            scaling_gt_data = scaling_gt_data[: pred_data.shape[0]]
 
             eva.evaluation(args.in_len, gt_output_data, pred_data, case_name)
             eva.visualization(gt_output_data, pred_data, case_name, CFG.RESULT_PATH)
