@@ -57,7 +57,7 @@ class DeepOLSTM(nn.Module):
         hidden1, _ = self.lstm(inp, h)
         hidden2 = self.spec_dense(spec)
 
-        x = torch.cat([hidden1, hidden2], dim=1)
+        x = torch.cat([hidden1[:, -1:, :], hidden2], dim=1)
         x = x.mean(dim=1)
         x = repeat(x, "bs d -> bs out_len n_pred d", out_len=self.out_len, n_pred=self.num_pred_features)
         x = self.branch(x)
