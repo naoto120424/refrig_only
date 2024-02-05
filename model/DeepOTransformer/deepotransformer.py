@@ -22,9 +22,9 @@ def clones(module, n):
 
 
 # classes
-class PositionalEmbedding(nn.Module):
+class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=5000):
-        super(PositionalEmbedding, self).__init__()
+        super(PositionalEncoding, self).__init__()
         # Compute the positional encodings once in log space.
         pe = torch.zeros(max_len, d_model).float()
         pe.requires_grad = False
@@ -111,17 +111,18 @@ class DeepOTransformer(nn.Module):
         self.num_target_features = cfg.NUM_TARGET_FEATURES
         self.num_all_features = cfg.NUM_ALL_FEATURES
         self.in_len = args.in_len
+        self.out_len = args.out_len
 
         self.input_embedding = nn.Linear(self.num_all_features, args.d_model)
-        self.positional_embedding = PositionalEmbedding(args.d_model)  # 絶対位置エンコーディング
-        self.spec_embedding = SpecEmbedding(args.d_model)
+        self.positional_encoding = PositionalEncoding(args.d_model)  # 絶対位置エンコーディング
+        self.spec_embedding = SpecEmbedding(args.d_model, self.num_control_features)
 
         self.dropout = nn.Dropout(args.dropout)
 
         self.transformer = Transformer(args)
-        
-        self.branch = nn.Linear(self.in_len+self.num_control_features, self.num_pred_features)
-        
+
+        self.branch = nn.Sequential(nn.Linear(args.d_model, args.d_model), nn.ReLU(), nn.Linear(args.d_model, args.d_model))
+
         # self.trunk = nn.Sequential(
         #     nn.Linear(1, args.d_model),
         #     nn.ReLU(),
@@ -131,16 +132,9 @@ class DeepOTransformer(nn.Module):
         #     nn.ReLU(),
         #     nn.Dropout(args.dropout),
         # )
-        
+
         self.trunk = nn.ModuleList([])
-        self.trunk.append(
-            nn.ModuleList(
-                [
-                    nn.Linear(1, args.trunk_d_model),
-                    nn.ReLU()
-                ]
-            )
-        )
+        self.trunk.append(nn.ModuleList([nn.Linear(1, args.trunk_d_model), nn.ReLU()]))
         for _ in range(args.trunk_layers-2):
             self.trunk.append(
                 nn.ModuleList(
@@ -160,26 +154,24 @@ class DeepOTransformer(nn.Module):
         )
         self.trunk_dropout = nn.Dropout(args.dropout)
 
-    def forward(self, input, spec, timedata):
-        x = self.input_embedding(input)
-        x += self.positional_embedding(x)
+    def forward(self, inp, spec, timedata):
+        x = self.input_embedding(inp)
+        x_spec = self.spec_embedding(spec)
+        x = torch.cat((x, x_spec), dim=1)
+        x += self.positional_encoding(x)
 
-        spec = self.spec_embedding(spec)
-
-        x = torch.cat((x, spec), dim=1)
-
-        x = self.dropout(x)
         x, attn = self.transformer(x)
-        x = self.branch(x.permute(0, 2, 1)).permute(0, 2, 1)
-        
-        y = timedata.repeat(1, self.num_pred_features).unsqueeze(2)
-        
+        x = x.mean(dim=1)
+        x = repeat(x, "bs d -> bs out_len n_pred d", out_len=self.out_len, n_pred=self.num_pred_features)
+        x = self.branch(x)
+
+        y = repeat(timedata, "bs out_len -> bs out_len n_pred 1", out_len=self.out_len, n_pred=self.num_pred_features)
+
         for linear, relu in self.trunk:
             y = linear(y)
             y = relu(y)
-        
+
         # print(f"x.shape: {x.shape}, y.shape: {y.shape}")
-        x = torch.sum(x * y, dim=-1, keepdim=True)
-        x = x.squeeze(2)
-        
+        x = torch.sum(x * y, dim=-1, keepdim=False)
+
         return x, attn
