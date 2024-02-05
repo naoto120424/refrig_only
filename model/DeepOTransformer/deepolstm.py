@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from einops import rearrange, repeat
 
 
 class DeepOLSTM(nn.Module):
@@ -12,10 +13,10 @@ class DeepOLSTM(nn.Module):
         self.num_target_features = cfg.NUM_TARGET_FEATURES
         self.num_all_features = cfg.NUM_ALL_FEATURES
         self.in_len = args.in_len
-        
-        self.branch1 = nn.Linear(2*args.d_model, self.num_pred_features)
-        self.branch2 = nn.Linear(1, args.d_model)
-        
+        self.out_len = args.out_len
+
+        self.branch = nn.Sequential(nn.Linear(args.d_model, args.d_model), nn.ReLU(), nn.Linear(args.d_model, args.d_model))
+
         self.trunk = nn.ModuleList([])
         self.trunk.append(
             nn.ModuleList(
@@ -42,7 +43,7 @@ class DeepOLSTM(nn.Module):
                 ]
             )
         )
-        
+
         self.lstm = nn.LSTM(
             input_size=cfg.NUM_ALL_FEATURES,
             hidden_size=args.d_model,
@@ -52,25 +53,22 @@ class DeepOLSTM(nn.Module):
         )
         self.spec_dense = nn.Linear(cfg.NUM_CONTROL_FEATURES, args.d_model)
 
-    def forward(self, input, spec, timedata, h=None):
-        hidden1, _ = self.lstm(input, h)
+    def forward(self, inp, spec, timedata, h=None):
+        hidden1, _ = self.lstm(inp, h)
         hidden2 = self.spec_dense(spec)
-        
-        x = torch.cat([hidden1[:, -1, :], hidden2], dim=1).unsqueeze(1)
-        # print(x.shape)
-        x = self.branch1(x)
-        # print(x.shape)
-        x = self.branch2(x.permute(0, 2, 1))
-        # print(x.shape)
-        
-        y = timedata.repeat(1, self.num_pred_features).unsqueeze(2)
-        
+
+        x = torch.cat([hidden1, hidden2], dim=1)
+        x = x.mean(dim=1)
+        x = repeat(x, "bs d -> bs out_len n_pred d", out_len=self.out_len, n_pred=self.num_pred_features)
+        x = self.branch(x)
+
+        y = repeat(timedata, "bs out_len -> bs out_len n_pred 1", out_len=self.out_len, n_pred=self.num_pred_features)
+
         for linear, relu in self.trunk:
             y = linear(y)
             y = relu(y)
-        # print(y.shape)
-        
-        x = torch.sum(x * y, dim=-1, keepdim=True)
-        x = x.squeeze(2)
-        
+
+        # print(f"x.shape: {x.shape}, y.shape: {y.shape}")
+        x = torch.sum(x * y, dim=-1, keepdim=False)
+
         return x, None
