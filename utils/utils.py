@@ -12,7 +12,7 @@ class CFG:
     NUM_TARGET_FEATURES = 7
     NUM_ALL_FEATURES = 62
     DATA_PATH = os.path.join("..", "refrig_only_data")
-    RESULT_PATH = os.path.join("..", "result")
+    RESULT_PATH = os.path.join("..", "refrig_only_result")
     MLFLOW_PATH = os.path.join("..", "mlflow_experiment")
 
 
@@ -90,11 +90,10 @@ def modelDecision(args, cfg):
         if "DeepOTransformer" in args.model:
             from model.DeepOTransformer.deepotransformer import DeepOTransformer
             return DeepOTransformer(cfg, args)
-        
+
         elif args.model == "DeepOLSTM":
             from model.DeepOTransformer.deepolstm import DeepOLSTM
             return DeepOLSTM(cfg, args)
-    
 
     if "Transformer" in args.model:
         if args.model == "Transformer":
@@ -115,22 +114,18 @@ def modelDecision(args, cfg):
             from model.linear.dlinear import Model
 
         return Model(cfg, args)
-    
+
     if "LSTM" in args.model:
         from model.lstm.lstm import LSTMClassifier
         return LSTMClassifier(cfg, args)
-    
-    
+
     if "s4" in args.model:
         if args.d_model == "s4d":
             from model.s4.s4d import S4D
             return S4D(args.d_model)
-        
-        
+
         elif args.model == "s4":
             from model.s4.s4 import S4Block
             return S4Block(args.d_model)
-    
-
 
     return None
