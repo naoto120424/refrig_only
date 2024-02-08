@@ -4,6 +4,7 @@
 /test.png
 /model/DeepONet/
 /model/linear/
+/data_plot.py
 /data_plot/
 /data_plot_teacher/
 
