@@ -8,7 +8,6 @@ from copy import deepcopy
 from einops import rearrange, repeat
 
 from model.BaseTransformer.spec_embed import SpecEmbedding
-from model.BaseTransformer.attn import Attention
 
 
 def pair(t):
@@ -51,56 +50,6 @@ class PositionalEncoding(nn.Module):
         return self.pe[:, : x.size(1)]
 
 
-class PreNorm(nn.Module):
-    def __init__(self, dim, fn):
-        super().__init__()
-        self.norm = nn.LayerNorm(dim)
-        self.fn = fn
-
-    def forward(self, x, **kwargs):
-        return self.fn(self.norm(x), **kwargs)
-
-
-class FeedForward(nn.Module):
-    def __init__(self, dim, hidden_dim, dropout=0.0):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(dim, hidden_dim),
-            nn.GELU(),
-            nn.Dropout(dropout),
-            nn.Linear(hidden_dim, dim),
-            nn.Dropout(dropout),
-        )
-
-    def forward(self, x):
-        return self.net(x)
-
-
-class Transformer(nn.Module):
-    def __init__(self, args):
-        super().__init__()
-        self.layers = nn.ModuleList([])
-        for _ in range(args.e_layers):
-            self.layers.append(
-                nn.ModuleList(
-                    [
-                        PreNorm(args.d_model, Attention(args)),
-                        PreNorm(args.d_model, FeedForward(args.d_model, args.d_ff, dropout=args.dropout)),
-                    ]
-                )
-            )
-
-    def forward(self, x):
-        attn_map_all = []
-        for i, (attn, ff) in enumerate(self.layers):
-            attn_x, attn_map = attn(x)
-            x = attn_x + x
-            x = ff(x) + x
-            attn_map_all = attn_map if i == 0 else torch.cat((attn_map_all, attn_map), dim=0)
-
-        return x, attn_map_all
-
-
 class DeepOTransformer(nn.Module):
     def __init__(self, cfg, args):
         super().__init__()
@@ -113,65 +62,81 @@ class DeepOTransformer(nn.Module):
         self.in_len = args.in_len
         self.out_len = args.out_len
 
+        self.branch_layers = args.branch_layers
+        self.trunk_layers = args.trunk_layers
+        self.width = args.width
+
         self.input_embedding = nn.Linear(self.num_all_features, args.d_model)
-        self.positional_encoding = PositionalEncoding(args.d_model)  # 絶対位置エンコーディング
         self.spec_embedding = SpecEmbedding(args.d_model, self.num_control_features)
+        self.positional_encoding = PositionalEncoding(args.d_model)  # 絶対位置エンコーディング
 
-        self.dropout = nn.Dropout(args.dropout)
-
-        self.transformer = Transformer(args)
-
-        self.branch = nn.Sequential(nn.Linear(args.d_model, args.d_model), nn.ReLU(), nn.Linear(args.d_model, args.d_model))
-
-        # self.trunk = nn.Sequential(
-        #     nn.Linear(1, args.d_model),
-        #     nn.ReLU(),
-        #     nn.Linear(args.d_model, args.d_model),
-        #     nn.ReLU(),
-        #     nn.Linear(args.d_model, args.d_model),
-        #     nn.ReLU(),
-        #     nn.Dropout(args.dropout),
-        # )
-
-        self.trunk = nn.ModuleList([])
-        self.trunk.append(nn.ModuleList([nn.Linear(1, args.trunk_d_model), nn.ReLU()]))
-        for _ in range(args.trunk_layers-2):
-            self.trunk.append(
-                nn.ModuleList(
-                    [
-                        nn.Linear(args.trunk_d_model, args.trunk_d_model),
-                        nn.ReLU(),
-                    ]
-                )
-            )
-        self.trunk.append(
-            nn.ModuleList(
-                [
-                    nn.Linear(args.trunk_d_model, args.d_model),
-                    nn.ReLU(),
-                ]
-            )
+        encoder_layers = nn.TransformerEncoderLayer(
+            d_model=args.d_model,
+            nhead=args.n_heads,
+            dim_feedforward=args.d_ff,
+            dropout=args.dropout,
+            activation="relu",
+            batch_first=True,
         )
-        self.trunk_dropout = nn.Dropout(args.dropout)
+        encoder_norm = nn.LayerNorm(args.d_model)
+        self.encoder = nn.TransformerEncoder(encoder_layer=encoder_layers, num_layers=args.e_layers, norm=encoder_norm)
 
-    def forward(self, inp, spec, timedata):
+        self.branch = nn.ModuleDict()
+        self.branch["LinM1"] = nn.Linear(args.d_model, self.out_len * self.num_pred_features * self.width)
+        self.branch["NonM1"] = nn.ReLU()
+        for i in range(2, self.branch_layers):
+            self.branch["LinM{}".format(i)] = nn.Linear(self.out_len * self.num_pred_features * self.width, self.out_len * self.num_pred_features * self.width)
+            self.branch["NonM{}".format(i)] = nn.ReLU()
+        if self.branch_layers != 1:
+            self.branch["LinMout"] = nn.Linear(self.width, self.width)
+
+        self.trunk = nn.ModuleDict()
+        for n in range(1, self.out_len + 1):
+            self.trunk["L{}_LinM1".format(n)] = nn.Linear(n * self.num_all_features, n * self.num_pred_features * self.width)
+            self.trunk["L{}_NonM1".format(n)] = nn.ReLU()
+            for i in range(2, self.trunk_layers + 1):
+                self.trunk["L{}_LinM{}".format(n, i)] = nn.Linear(n * self.num_pred_features * self.width, n * self.num_pred_features * self.width)
+                self.trunk["L{}_NonM{}".format(n, i)] = nn.ReLU()
+
+        self.params = nn.ParameterDict()
+        for i in range(1, self.out_len + 1):
+            self.params["L{}_bias".format(i)] = nn.Parameter(torch.zeros([i, self.num_pred_features]))
+
+    def forward(self, inp, spec):
         x = self.input_embedding(inp)
         x_spec = self.spec_embedding(spec)
         x = torch.cat((x, x_spec), dim=1)
         x += self.positional_encoding(x)
 
-        x, attn = self.transformer(x)
+        x = self.encoder(x)
         x = x.mean(dim=1)
-        x = repeat(x, "bs d -> bs out_len n_pred d", out_len=self.out_len, n_pred=self.num_pred_features)
-        x = self.branch(x)
 
-        y = repeat(timedata, "bs out_len -> bs out_len n_pred 1", out_len=self.out_len, n_pred=self.num_pred_features)
+        if self.branch_layers == 1:
+            LinM = self.branch["LinM1"]
+            x = LinM(x)
+            x = rearrange(x, "bs (out_len n d) -> bs out_len n d", out_len=self.out_len, n=self.num_pred_features)
+        else:
+            for i in range(1, self.branch_layers):
+                LinM = self.branch["LinM{}".format(i)]
+                NonM = self.branch["NonM{}".format(i)]
+                x = NonM(LinM(x))
+            x = rearrange(x, "bs (out_len n d) -> bs out_len n d", out_len=self.out_len, n=self.num_pred_features)
+            x = self.branch["LinMout"](x)
 
-        for linear, relu in self.trunk:
-            y = linear(y)
-            y = relu(y)
+        y = inp[:, -1:, :]
 
-        # print(f"x.shape: {x.shape}, y.shape: {y.shape}")
-        x = torch.sum(x * y, dim=-1, keepdim=False)
+        for t in range(1, self.out_len + 1):
+            y_out = y
+            y_out = rearrange(y_out, "bs len n -> bs (len n)")
+            for i in range(1, self.trunk_layers + 1):
+                LinM = self.trunk["L{}_LinM{}".format(t, i)]
+                NonM = self.trunk["L{}_NonM{}".format(t, i)]
+                y_out = NonM(LinM(y_out))
 
-        return x, attn
+            y_out = rearrange(y_out, "bs (out_len n d) -> bs out_len n d", out_len=t, n=self.num_pred_features)
+            y_out = torch.nansum(x[:, :t] * y_out, dim=-1, keepdim=False) + self.params["L{}_bias".format(t)]
+
+            y_out = torch.cat((spec[:, :t], y_out), dim=-1)
+            y = torch.cat((y, y_out[:, -1:]), dim=1)
+
+        return y[:, 1:, self.num_control_features :], None

@@ -8,7 +8,6 @@ from copy import deepcopy
 from einops import rearrange, repeat
 
 from model.BaseTransformer.spec_embed import SpecEmbedding
-from model.BaseTransformer.attn import Attention
 
 
 def pair(t):
@@ -51,56 +50,6 @@ class PositionalEmbedding(nn.Module):
         return self.pe[:, : x.size(1)]
 
 
-class PreNorm(nn.Module):
-    def __init__(self, dim, fn):
-        super().__init__()
-        self.norm = nn.LayerNorm(dim)
-        self.fn = fn
-
-    def forward(self, x, **kwargs):
-        return self.fn(self.norm(x), **kwargs)
-
-
-class FeedForward(nn.Module):
-    def __init__(self, dim, hidden_dim, dropout=0.0):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(dim, hidden_dim),
-            nn.GELU(),
-            nn.Dropout(dropout),
-            nn.Linear(hidden_dim, dim),
-            nn.Dropout(dropout),
-        )
-
-    def forward(self, x):
-        return self.net(x)
-
-
-class Transformer(nn.Module):
-    def __init__(self, args):
-        super().__init__()
-        self.layers = nn.ModuleList([])
-        for _ in range(args.e_layers):
-            self.layers.append(
-                nn.ModuleList(
-                    [
-                        PreNorm(args.d_model, Attention(args)),
-                        PreNorm(args.d_model, FeedForward(args.d_model, args.d_ff, dropout=args.dropout)),
-                    ]
-                )
-            )
-
-    def forward(self, x):
-        attn_map_all = []
-        for i, (attn, ff) in enumerate(self.layers):
-            attn_x, attn_map = attn(x)
-            x = attn_x + x
-            x = ff(x) + x
-            attn_map_all = attn_map if i == 0 else torch.cat((attn_map_all, attn_map), dim=0)
-
-        return x, attn_map_all
-
-
 class BaseTransformer(nn.Module):
     def __init__(self, cfg, args):
         super().__init__()
@@ -116,11 +65,21 @@ class BaseTransformer(nn.Module):
         self.input_embedding = nn.Linear(self.num_all_features, args.d_model)
         self.spec_embedding = SpecEmbedding(args.d_model, self.num_control_features)
         self.positional_embedding = PositionalEmbedding(args.d_model)  # 絶対位置エンコーディング
-        
+
         self.pred_token = nn.Parameter(torch.randn(1, self.out_len, args.d_model))
 
         self.dropout = nn.Dropout(args.dropout)
-        self.transformer = Transformer(args)
+
+        encoder_layers = nn.TransformerEncoderLayer(
+            d_model=args.d_model,
+            nhead=args.n_heads,
+            dim_feedforward=args.d_ff,
+            dropout=args.dropout,
+            activation="relu",
+            batch_first=True,
+        )
+        encoder_norm = nn.LayerNorm(args.d_model)
+        self.encoder = nn.TransformerEncoder(encoder_layer=encoder_layers, num_layers=args.e_layers, norm=encoder_norm)
 
         self.generator = nn.Sequential(nn.LayerNorm(args.d_model), nn.Linear(args.d_model, self.num_pred_features))
 
@@ -128,14 +87,14 @@ class BaseTransformer(nn.Module):
         x = self.input_embedding(input)
         spec = self.spec_embedding(spec)
         x = torch.cat((x, spec), dim=1)
-        
+
         x += self.positional_embedding(x)
 
         pred_tokens = repeat(self.pred_token, "() n d -> b n d", b=x.shape[0])
         x = torch.cat((pred_tokens, x), dim=1)
 
         x = self.dropout(x)
-        x, attn = self.transformer(x)
-        
+        x = self.encoder(x)
+
         x = self.generator(x[:, :self.out_len])
-        return x, attn
+        return x, None
