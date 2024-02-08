@@ -4,5 +4,7 @@
 /test.png
 /model/DeepONet/
 /model/linear/
+/data_plot/
+/data_plot_teacher/
 
 __pycache__
