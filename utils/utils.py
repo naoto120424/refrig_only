@@ -6,14 +6,26 @@ import os
 
 
 class CFG:
-    NUM_CONTROL_FEATURES = 15
-    NUM_PRED_FEATURES = 47
-    NUM_BYPRODUCT_FEATURES = 40
-    NUM_TARGET_FEATURES = 7
-    NUM_ALL_FEATURES = 62
-    DATA_PATH = os.path.join("..", "refrig_only_data")
-    RESULT_PATH = os.path.join("..", "refrig_only_result")
-    MLFLOW_PATH = os.path.join("..", "mlflow_experiment")
+
+    def __init__(self, args) -> None:
+        if args.dataset == "teacher":
+            self.NUM_CONTROL_FEATURES = 9
+            self.NUM_PRED_FEATURES = 41
+            self.NUM_BYPRODUCT_FEATURES = 37
+            self.NUM_TARGET_FEATURES = 4
+            self.NUM_ALL_FEATURES = 50
+            self.DATA_PATH = os.path.join("..", "teacher")
+            self.RESULT_PATH = os.path.join("..", "teacher_result")
+        else:
+            self.NUM_CONTROL_FEATURES = 15
+            self.NUM_PRED_FEATURES = 47
+            self.NUM_BYPRODUCT_FEATURES = 40
+            self.NUM_TARGET_FEATURES = 7
+            self.NUM_ALL_FEATURES = 62
+            self.DATA_PATH = os.path.join("..", "refrig_only_data")
+            self.RESULT_PATH = os.path.join("..", "refrig_only_result")
+
+        self.MLFLOW_PATH = os.path.join("..", "mlflow_experiment")
 
 
 model_list = {

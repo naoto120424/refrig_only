@@ -27,7 +27,7 @@ def decimate(data):
 
 
 # Load All Data
-def load_data(cfg, in_len=20, out_len=20, debug=False):
+def load_data(cfg, dataset, in_len=20, out_len=20, debug=False):
     print("Load Data")
     print("----------------------------------------------")
     csv_files = glob.glob(os.path.join(cfg.DATA_PATH, "*.csv"))
@@ -52,8 +52,8 @@ def load_data(cfg, in_len=20, out_len=20, debug=False):
         spec_list = []
         gt_list = []
         t_list = []
-        
-        if single_data.shape[0] != 3299:
+
+        if dataset == "refrig_only" and single_data.shape[0] != 3299:
             del_files.append(file)
         else:
             for t in range(single_data.shape[0] - in_len - out_len + 1):
@@ -70,13 +70,13 @@ def load_data(cfg, in_len=20, out_len=20, debug=False):
             # print(np.array(spec_list).shape)
             # print(np.array(gt_list).shape)
             # print(np.array(t_list).shape)
-            
+
     data["inp"] = np.array(Xdata)           # shape(case_num, 3299-(in_len+out_len), in_len, num_all_features)
     data["spec"] = np.array(Specdata)       # shape(case_num, 3299-(in_len+out_len), out_len, num_control_features)
     data["gt"] = np.array(Ydata)            # shape(case_num, 3299-(in_len+out_len), out_len, num_pred_features)
     data["timedata"] = np.array(TimeData)   # shape(case_num, 3299-(in_len+out_len), out_len)
     data["gt_data"] = np.array(GTData)      # shape(case_num, 3299, num_all_features)
-    # print('data["inp"]', data["inp"].shape) 
+    # print('data["inp"]', data["inp"].shape)
     # print('data["spec"]', data["spec"].shape)
     # print('data["gt"]', data["gt"].shape)
     # print('data["timedata"]', data['timedata'].shape)
@@ -85,8 +85,8 @@ def load_data(cfg, in_len=20, out_len=20, debug=False):
     data["feature_name"] = list(map(lambda x: x.split(".")[0], pd.read_csv(os.path.join(cfg.DATA_PATH, csv_files[0]), skiprows=0, dtype=str).columns))
     data["feature_unit"] = list(map(lambda x: x.split(".")[0], pd.read_csv(os.path.join(cfg.DATA_PATH, csv_files[0]), skiprows=1, dtype=str).columns))
     data["feature_name"][7] = "ChillerInT_spec"
-    data["feature_name"][38] = "ChillerInT"
-    
+    data["feature_name"][38] = "ChillerInT" if dataset == "refrig_only" else data["feature_name"][38]
+
     data["pred_name"] = data["feature_name"][-cfg.NUM_PRED_FEATURES:]
     data["pred_unit"] = data["feature_unit"][-cfg.NUM_PRED_FEATURES:]
     data["target_name"] = data["feature_name"][-cfg.NUM_TARGET_FEATURES:]
@@ -96,19 +96,22 @@ def load_data(cfg, in_len=20, out_len=20, debug=False):
 
     for file in del_files:
         csv_files.remove(file)
-    
+
     return data, csv_files
 
 
 # Calculate mean & std for scaling from train data
-def find_meanstd(cfg, train_index_list, csv_files):
+def find_meanstd(cfg, dataset, train_index_list, csv_files):
     train_csv_files = []
     for index in train_index_list:
         train_csv_files.append(csv_files[index])
     input_data = []
     for file in train_csv_files:
         single_data = pd.read_csv(os.path.join(cfg.DATA_PATH, file), skiprows=1).values
-        if single_data.shape[0] == 33000:
+        if dataset == "refrig_only":
+            if single_data.shape[0] == 33000:
+                input_data.append(decimate(single_data))
+        else:
             input_data.append(decimate(single_data))
     input_array = np.array(input_data)
     mean_list = []
@@ -139,7 +142,7 @@ class MazdaDataset(Dataset):
 
 
 # データセットを作成する関数
-def create_dataset(cfg, original_data, index_list, csv_files, is_train, mean_list=[], std_list=[]):
+def create_dataset(cfg, dataset, original_data, index_list, csv_files, is_train, mean_list=[], std_list=[]):
     num_control_features = cfg.NUM_CONTROL_FEATURES
     data = {}
     input_data_list = []
@@ -158,7 +161,7 @@ def create_dataset(cfg, original_data, index_list, csv_files, is_train, mean_lis
     time_data_array = np.array(time_data_list)
     # print(input_array.shape, spec_array.shape, gt_array.shape, time_data_array.shape)
 
-    mean_list, std_list = find_meanstd(cfg, index_list, csv_files) if is_train else (mean_list, std_list)
+    mean_list, std_list = find_meanstd(cfg, dataset, index_list, csv_files) if is_train else (mean_list, std_list)
     print("\n\nTrain Dataset Normalization") if is_train else print("\n\nValidation Dataset Normalization")
     print("----------------------------------------------")
 
@@ -176,7 +179,7 @@ def create_dataset(cfg, original_data, index_list, csv_files, is_train, mean_lis
     print("\n[ground truth]")
     for i in tqdm(range(gt_array.shape[3])):
         gt_array[:, :, :, i] = (gt_array[:, :, :, i] - mean_list[i+num_control_features+1]) / std_list[i+num_control_features+1]
-        
+
     print("\n[time data]")
     for i in tqdm(range(time_data_array.shape[2])):
         time_data_array[:, :, i] = (time_data_array[:, :, i] - mean_list[0]) / std_list[0]

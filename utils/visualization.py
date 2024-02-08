@@ -131,23 +131,30 @@ class Eva():
 def print_model_summary(args, device, len_train_index, len_val_index):
     print("\n\nTrain Start")
     print("----------------------------------------------")
+    print(f"Dataset     : {str.upper(args.dataset)}")
     print(f"Device      : {str.upper(device)}")
     print(f"Train Case  : {len_train_index}")
     print(f"Val Case    : {len_val_index}")
     print(f"Criterion   : {args.criterion}")
     print(f"Batch Size  : {args.bs}")
     print(f"in_len      : {args.in_len}")
+    print(f"out_len     : {args.out_len}")
     print(f"Model       : {args.model}")
     print(f" - e_layers  : {args.e_layers}")
     print(f" - d_model   : {args.d_model}")
     print(f" - dropout   : {args.dropout}")
-    if ("BaseTransformer" in args.model) or ("Crossformer" in args.model) or ("DeepO" in args.model):
+    if ("BaseTransformer" in args.model) or ("Crossformer" in args.model):
         print(f" - num heads : {args.n_heads}")
         print(f" - dim of ff : {args.d_ff}")
         if "Crossformer" in args.model:
             print(f" - seg len   : {args.seg_len}")
             print(f" - win size  : {args.win_size}")
             print(f" - factor num: {args.factor}")
-        if "DeepO" in args.model:
-            print(f" - trunk layers : {args.trunk_layers}")
-            print(f" - trunk dim    : {args.trunk_d_model}")
+
+    if "DeepO" in args.model:
+        if "Transformer" in args.model:
+            print(f" - num heads : {args.n_heads}")
+            print(f" - dim of ff : {args.d_ff}")
+        print(f" - branch layers : {args.branch_layers}")
+        print(f" - trunk layers  : {args.trunk_layers}")
+        print(f" - width         : {args.width}")

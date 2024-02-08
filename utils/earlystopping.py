@@ -1,10 +1,12 @@
 import numpy as np
 import torch
 import mlflow
+import os
 
 
 class EarlyStopping:
-    def __init__(self, patience=7, verbose=False, delta=1e-3, path="../result/best_model.pth", trace_func=print) -> None:
+
+    def __init__(self, patience=7, verbose=False, delta=1e-3, path="result", trace_func=print):
         self.patience = patience
         self.verbose = verbose
         self.counter = 0
@@ -12,7 +14,7 @@ class EarlyStopping:
         self.early_stop = False
         self.val_loss_min = np.Inf
         self.delta = delta
-        self.path = path
+        self.path = os.path.join(path, "best_model.pth")
         self.trace_func = trace_func
 
     def __call__(self, val_loss, model, epoch):
