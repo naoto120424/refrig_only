@@ -81,13 +81,18 @@ class S4DKernel(nn.Module):
 
 
 class S4D(nn.Module):
-    def __init__(self, d_model, d_state=64, dropout=0.0, transposed=False, **kernel_args):
+
+    def __init__(self, cfg, args, **kernel_args):
         super().__init__()
 
-        self.h = 50  # d_model
-        self.n = d_model  # d_state
+        self.h = cfg.NUM_ALL_FEATURES
+        self.num_pred_features = cfg.NUM_PRED_FEATURES
+        self.n = args.d_model  # d_state
         self.d_output = self.h
-        self.transposed = transposed
+        self.transposed = False
+
+        self.in_len = args.in_len
+        self.out_len = args.out_len
 
         self.D = nn.Parameter(torch.randn(self.h))
 
@@ -98,45 +103,46 @@ class S4D(nn.Module):
         self.activation = nn.GELU()
         # dropout_fn = nn.Dropout2d # NOTE: bugged in PyTorch 1.11
         dropout_fn = DropoutNd
-        self.dropout = dropout_fn(dropout) if dropout > 0.0 else nn.Identity()
-        
-        self.spec_linear = nn.Linear(9, d_model)
+        self.dropout = dropout_fn(args.dropout) if args.dropout > 0.0 else nn.Identity()
+
+        self.spec_linear = nn.Linear(cfg.NUM_CONTROL_FEATURES, args.d_model)
 
         # position-wise output transform to mix features
         self.output_linear = nn.Sequential(
             nn.Conv1d(self.h, 2*self.h, kernel_size=1),
             nn.GLU(dim=-2),
         )
-        
-        self.output = nn.Linear(self.h+self.n, 41)
+        self.output_linear2 = nn.Linear(self.h, self.out_len * args.d_model)
 
-    def forward(self, u, spec, **kwargs): # absorbs return_output and transformer src mask
-        """ Input and output shape (B, H, L) """
-        if not self.transposed: u = u.transpose(-1, -2)
-        L = u.size(-1)
+        # self.output = nn.Linear(args.d_model, cfg.NUM_PRED_FEATURES)
+        self.output = nn.Linear(self.in_len, self.out_len)
+
+    def forward(self, inp, spec, **kwargs):  # absorbs return_output and transformer src mask
+        inp = inp.transpose(-1, -2)
+        L = inp.size(-1)
 
         # Compute SSM Kernel
         k = self.kernel(L=L) # (H L)
 
         # Convolution
-        k_f = torch.fft.rfft(k, n=2*L) # (H L)
-        u_f = torch.fft.rfft(u, n=2*L) # (B H L)
-        # print("k", k.shape, "u", u.shape, "k_f", k_f.shape, "u_f", u_f.shape)
-        y = torch.fft.irfft(u_f*k_f, n=2*L)[..., :L] # (B H L)
+        k_f = torch.fft.rfft(k, n=2 * L)  # (H L)
+        inp_f = torch.fft.rfft(inp, n=2 * L)  # (B H L)
+        y = torch.fft.irfft(inp_f * k_f, n=2 * L)[..., :L]  # (B H L)
 
         # Compute D term in state space equation - essentially a skip connection
-        y = y + u * self.D.unsqueeze(-1)
+        y = y + inp * self.D.unsqueeze(-1)
 
         y = self.dropout(self.activation(y))
-        
-        spec = self.spec_linear(spec)
-        
         y = self.output_linear(y)
-        # print(y.shape)
-        # if not self.transposed: y = y.transpose(-1, -2)
-        y = y.mean(dim=-1)
-        # print(y.shape)
-        y = torch.cat((y, spec), dim=1)
+        # y = rearrange(y[:, :, -1:], "bs n l -> bs (n l)", l=1)
+        # y = self.output_linear2(y)
+        # y = rearrange(y, "bs (l d) -> bs l d", l=self.out_len)
+
+        # spec = self.spec_linear(spec)
+
+        # y = torch.cat((y, spec), dim=1)
         y = self.output(y)
-        
-        return y, None # Return a dummy state to satisfy this repo's interface, but this can be modified
+        # y = rearrange(y[:, -self.num_pred_features :], "bs n l -> bs l n")
+        y = y.transpose(-1, -2)
+
+        return y[:, : self.out_len, -self.num_pred_features :], None  # Return a dummy state to satisfy this repo's interface, but this can be modified
