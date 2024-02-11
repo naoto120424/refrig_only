@@ -158,3 +158,36 @@ def print_model_summary(args, device, len_train_index, len_val_index):
         print(f" - branch layers : {args.branch_layers}")
         print(f" - trunk layers  : {args.trunk_layers}")
         print(f" - width         : {args.width}")
+
+
+def mlflow_summary(cfg, args):
+    mlflow.set_tracking_uri(cfg.MLFLOW_PATH)
+    mlflow.set_experiment(args.e_name)
+    mlflow.start_run()
+    mlflow.log_param("dataset", args.dataset)
+    mlflow.log_param("model", args.model)
+    mlflow.log_param("debug", args.debug)
+    mlflow.log_param("seed", args.seed)
+    mlflow.log_param("batch size", args.bs)
+    mlflow.log_param("criterion", args.criterion)
+    mlflow.log_param("patience", args.patience)
+    mlflow.log_param("delta", args.delta)
+    mlflow.log_param("in_len", args.in_len)
+    mlflow.log_param("out_len", args.out_len)
+    mlflow.log_param("d_model", args.d_model)
+    mlflow.log_param("e_layers", args.e_layers)
+    mlflow.log_param("dropout", args.dropout)
+    if ("BaseTransformer" in args.model) or ("Crossformer" in args.model):
+        mlflow.log_param("heads", args.n_heads)
+        mlflow.log_param("d_ff", args.d_ff)
+        if "Crossformer" in args.model:
+            mlflow.log_param("seg_len", args.seg_len)
+            mlflow.log_param("win_size", args.win_size)
+            mlflow.log_param("factor", args.factor)
+    if "DeepO" in args.model:
+        if "Transformer" in args.model:
+            mlflow.log_param("heads", args.n_heads)
+            mlflow.log_param("d_ff", args.d_ff)
+        mlflow.log_param("branch layers", args.branch_layers)
+        mlflow.log_param("trunk layers", args.trunk_layers)
+        mlflow.log_param("width", args.width)

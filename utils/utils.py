@@ -107,6 +107,11 @@ def modelDecision(args, cfg):
             from model.DeepOTransformer.deepolstm import DeepOLSTM
             return DeepOLSTM(cfg, args)
 
+        elif args.model == "DeepONet":
+            from model.DeepOTransformer.deeponet import DeepONet
+
+            return DeepONet(cfg, args)
+
     if "Transformer" in args.model:
         if args.model == "Transformer":
             from model.Transformer.transformer import Transformer
@@ -132,11 +137,11 @@ def modelDecision(args, cfg):
         return LSTMClassifier(cfg, args)
 
     if "s4" in args.model:
-        if args.d_model == "s4d":
+        if "d" in args.model:
             from model.s4.s4d import S4D
-            return S4D(args.d_model)
+            return S4D(cfg, args)
 
-        elif args.model == "s4":
+        else:
             from model.s4.s4 import S4Block
             return S4Block(args.d_model)
 
