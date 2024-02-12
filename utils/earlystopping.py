@@ -6,7 +6,7 @@ import os
 
 class EarlyStopping:
 
-    def __init__(self, patience=7, verbose=False, delta=1e-3, path="result", trace_func=print):
+    def __init__(self, path, patience=7, verbose=False, delta=1e-3, trace_func=print):
         self.patience = patience
         self.verbose = verbose
         self.counter = 0
