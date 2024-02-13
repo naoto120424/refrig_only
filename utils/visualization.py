@@ -10,7 +10,7 @@ class Eva():
         self.pred_unit = data["pred_unit"]
         self.target_name = data["target_name"]
         self.target_unit = data["target_unit"]
-        
+
         self.evaluation_list = ["ade", "fde", "mde"]
         self.eva_all = []
 
@@ -19,7 +19,6 @@ class Eva():
             fde: final displacement error (Error of the last time)
             mde: max displacement error (Maximum error of all times)
         """
-
 
     # Calculate Evaluation
     def evaluation(self, in_len, gt_array, pred_array, case_name):
@@ -33,17 +32,16 @@ class Eva():
             eva_case.append(fde)
             eva_case.append(mde)
 
-            case_evaluation_path = os.path.join("..", "result", "vis", "original_scale", case_name, "evaluation")
-            os.makedirs(case_evaluation_path, exist_ok=True)
+            # case_evaluation_path = os.path.join("..", "result", "vis", "original_scale", case_name, "evaluation")
+            # os.makedirs(case_evaluation_path, exist_ok=True)
 
-            f = open(os.path.join(case_evaluation_path, f"{self.pred_name[i]}.txt"), "w")
-            f.write(f"ade: {ade}\n")
-            f.write(f"fde: {fde}\n")
-            f.write(f"mde: {mde}\n")
-            f.close()
-                
+            # f = open(os.path.join(case_evaluation_path, f"{self.pred_name[i]}.txt"), "w")
+            # f.write(f"ade: {ade}\n")
+            # f.write(f"fde: {fde}\n")
+            # f.write(f"mde: {mde}\n")
+            # f.close()
+
         self.eva_all.append(eva_case)
-
 
     # Save Evaluation
     def save_evaluation(self, result_path):
@@ -61,7 +59,6 @@ class Eva():
                 f.write(f"mean: {np.mean(np_array)}\n")
                 f.write(f"median: {np.median(np_array)}\n")
                 f.close()
-
 
     # Make Graph
     def visualization(self, gt_array, pred_array, case_name, result_path, is_normalized=False):
@@ -100,7 +97,6 @@ class Eva():
         fig.tight_layout()
         plt.savefig(os.path.join(img_path, f"target_kW.png"))
         plt.close()
-
 
     # Make AttentionMap Graph
     def attention_visualization(self, args, attn_all, result_path, case_name):

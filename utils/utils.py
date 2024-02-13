@@ -14,18 +14,18 @@ class CFG:
             self.NUM_BYPRODUCT_FEATURES = 37
             self.NUM_TARGET_FEATURES = 4
             self.NUM_ALL_FEATURES = 50
-            self.DATA_PATH = os.path.join("..", "teacher")
-            self.RESULT_PATH = os.path.join("..", "teacher_result")
+            self.DATA_PATH = os.path.join("..", "data_step2")
+            self.RESULT_PATH = os.path.join("..", "result_step2")
         else:
             self.NUM_CONTROL_FEATURES = 15
             self.NUM_PRED_FEATURES = 47
             self.NUM_BYPRODUCT_FEATURES = 40
             self.NUM_TARGET_FEATURES = 7
             self.NUM_ALL_FEATURES = 62
-            self.DATA_PATH = os.path.join("..", "refrig_only_data")
-            self.RESULT_PATH = os.path.join("..", "refrig_only_result")
+            self.DATA_PATH = os.path.join("..", "data_refrig_only")
+            self.RESULT_PATH = os.path.join("..", "result_refrig_only")
 
-        self.MLFLOW_PATH = os.path.join("..", "mlflow_experiment")
+        self.MLFLOW_PATH = os.path.join("..", "mlflow")
 
 
 model_list = {

@@ -12,8 +12,6 @@ from utils.dataloader import load_data, create_dataset
 from utils.visualization import Eva, print_model_summary, mlflow_summary
 from utils.earlystopping import EarlyStopping
 
-from model.s4.s4d import S4D
-
 
 def main():
     """parser"""
@@ -64,38 +62,6 @@ def main():
     if os.path.isdir(cfg.RESULT_PATH):
         shutil.rmtree(cfg.RESULT_PATH)
 
-    """ mlflow """
-    mlflow.set_tracking_uri(cfg.MLFLOW_PATH)
-    mlflow.set_experiment(args.e_name)
-    mlflow.start_run()
-    mlflow.log_param("dataset", args.dataset)
-    mlflow.log_param("model", args.model)
-    mlflow.log_param("debug", args.debug)
-    mlflow.log_param("seed", args.seed)
-    mlflow.log_param("batch size", args.bs)
-    mlflow.log_param("criterion", args.criterion)
-    mlflow.log_param("patience", args.patience)
-    mlflow.log_param("delta", args.delta)
-    mlflow.log_param("in_len", args.in_len)
-    mlflow.log_param("out_len", args.out_len)
-    mlflow.log_param("d_model", args.d_model)
-    mlflow.log_param("e_layers", args.e_layers)
-    mlflow.log_param("dropout", args.dropout)
-    if ("BaseTransformer" in args.model) or ("Crossformer" in args.model):
-        mlflow.log_param("heads", args.n_heads)
-        mlflow.log_param("d_ff", args.d_ff)
-        if "Crossformer" in args.model:
-            mlflow.log_param("seg_len", args.seg_len)
-            mlflow.log_param("win_size", args.win_size)
-            mlflow.log_param("factor", args.factor)
-    if "DeepO" in args.model:
-        if "Transformer" in args.model:
-            mlflow.log_param("heads", args.n_heads)
-            mlflow.log_param("d_ff", args.d_ff)
-        mlflow.log_param("branch layers", args.branch_layers)
-        mlflow.log_param("trunk layers", args.trunk_layers)
-        mlflow.log_param("width", args.width)
-
     """Prepare"""
     seed_everything(seed=args.seed)
     data, csv_files = load_data(cfg, args.dataset, in_len=args.in_len, out_len=args.out_len, debug=args.debug)
@@ -113,7 +79,6 @@ def main():
     val_dataloader = DataLoader(val_dataset, batch_size=args.bs, shuffle=True, num_workers=os.cpu_count())
 
     model = modelDecision(args, cfg)
-    # model = S4D(args.d_model)
     model.to(device)
 
     criterion = criterion_list[args.criterion]
@@ -125,6 +90,7 @@ def main():
 
     """Train"""
     print_model_summary(args, device, len(train_index_list), len(val_index_list))
+    mlflow_summary(cfg, args)
     train_start_time = time.perf_counter()
     for epoch in range(1, epoch_num + 1):
         print("----------------------------------------------")
