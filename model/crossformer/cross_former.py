@@ -108,7 +108,7 @@ class Crossformer(nn.Module):
         enc_out = self.encoder(x)
 
         dec_in = self.dec_value_embedding(dec_in)
-        dec_in += repeat(self.dec_pos_embedding, "b ts_d l d -> (repeat b) ts_d l d", repeat=batch_size)[dec_in.shape]
+        dec_in += repeat(self.dec_pos_embedding, "b ts_d l d -> (repeat b) ts_d l d", repeat=batch_size)
         predict_y = self.decoder(dec_in, enc_out)
 
         return predict_y[:, : self.out_len, self.num_control_features :], None

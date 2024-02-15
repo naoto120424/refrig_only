@@ -15,7 +15,6 @@ class CFG:
             self.NUM_TARGET_FEATURES = 4
             self.NUM_ALL_FEATURES = 50
             self.DATA_PATH = os.path.join("..", "data_step2")
-            self.RESULT_PATH = os.path.join("..", "result_step2")
         else:
             self.NUM_CONTROL_FEATURES = 15
             self.NUM_PRED_FEATURES = 47
@@ -23,8 +22,8 @@ class CFG:
             self.NUM_TARGET_FEATURES = 7
             self.NUM_ALL_FEATURES = 62
             self.DATA_PATH = os.path.join("..", "data_refrig_only")
-            self.RESULT_PATH = os.path.join("..", "result_refrig_only")
 
+        self.RESULT_PATH = os.path.join("..", "result")
         self.MLFLOW_PATH = os.path.join("..", "mlflow")
 
 
@@ -46,8 +45,9 @@ model_list = {
     "NLinear",
     "DeepOTransformer",
     "DeepOLSTM",
+    "DeepOLSTM_v2",
     "s4",
-    "s4d"
+    "s4d",
 }
 
 criterion_list = {"MSE": nn.MSELoss(), "L1": nn.L1Loss()}
@@ -102,11 +102,13 @@ def modelDecision(args, cfg):
         if "DeepOTransformer" in args.model:
             from model.DeepOTransformer.deepotransformer import DeepOTransformer
             return DeepOTransformer(cfg, args)
-
         elif args.model == "DeepOLSTM":
             from model.DeepOTransformer.deepolstm import DeepOLSTM
             return DeepOLSTM(cfg, args)
+        elif args.model == "DeepOLSTM_v2":
+            from model.DeepOTransformer.deepolstm_v2 import DeepOLSTM
 
+            return DeepOLSTM(cfg, args)
         elif args.model == "DeepONet":
             from model.DeepOTransformer.deeponet import DeepONet
 
