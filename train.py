@@ -44,7 +44,7 @@ def main():
 
     """ Transformer """
     parser.add_argument("--n_heads", type=int, default=8, help="num of heads of multi-head Attention")
-    parser.add_argument("--d_ff", type=int, default=256, help="dimension of MLP in transformer")
+    parser.add_argument("--d_ff", type=int, default=512, help="dimension of MLP in transformer")
 
     """ Crossformer """
     parser.add_argument("--seg_len", type=int, default=3, help="(CrossFormer) segment length (L_seg)")
