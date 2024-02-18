@@ -32,19 +32,25 @@ class DeepOLSTM(nn.Module):
         if self.branch_layers == 1:
             self.branch["LinM1"] = nn.Linear(args.d_model * 2, self.num_pred_features * self.width)
         else:
-            self.branch["LinM1"] = nn.Linear(args.d_model * 2, self.num_pred_features * self.width)
+            self.branch["LinM1"] = nn.Linear(args.d_model * 2, self.num_pred_features * args.d_model)
             self.branch["NonM1"] = nn.ReLU()
             for i in range(2, self.branch_layers):
-                self.branch["LinM{}".format(i)] = nn.Linear(self.num_pred_features * self.width, self.num_pred_features * self.width)
+                self.branch["LinM{}".format(i)] = nn.Linear(self.num_pred_features * args.d_model, self.num_pred_features * args.d_model)
                 self.branch["NonM{}".format(i)] = nn.ReLU()
-            self.branch["LinMout"] = nn.Linear(self.num_pred_features * self.width, self.num_pred_features * self.width)
+            self.branch["LinMout"] = nn.Linear(self.num_pred_features * args.d_model, self.num_pred_features * self.width)
 
         self.trunk = nn.ModuleDict()
-        self.trunk["LinM1"] = nn.Linear(self.num_all_features, self.num_pred_features * self.width)
-        self.trunk["NonM1"] = nn.ReLU()
-        for i in range(2, self.trunk_layers + 1):
-            self.trunk["LinM{}".format(i)] = nn.Linear(self.num_pred_features * self.width, self.num_pred_features * self.width)
-            self.trunk["NonM{}".format(i)] = nn.ReLU()
+        if self.trunk_layers == 1:
+            self.trunk["LinM1"] = nn.Linear(self.num_all_features, self.num_pred_features * self.width)
+            self.trunk["NonM1"] = nn.ReLU()
+        else:
+            self.trunk["LinM1"] = nn.Linear(self.num_all_features, self.num_pred_features * args.d_model)
+            self.trunk["NonM1"] = nn.ReLU()
+            for i in range(2, self.trunk_layers):
+                self.trunk["LinM{}".format(i)] = nn.Linear(self.num_pred_features * args.d_model, self.num_pred_features * args.d_model)
+                self.trunk["NonM{}".format(i)] = nn.ReLU()
+            self.trunk["LinM{}".format(self.trunk_layers)] = nn.Linear(self.num_pred_features * args.d_model, self.num_pred_features * self.width)
+            self.trunk["NonM{}".format(self.trunk_layers)] = nn.ReLU()
 
         self.params = nn.ParameterDict()
         self.params["bias"] = nn.Parameter(torch.zeros([self.num_pred_features]))

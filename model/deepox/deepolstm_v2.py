@@ -28,11 +28,14 @@ class DeepOLSTM(nn.Module):
         )
         self.spec_dense = nn.Linear(cfg.NUM_CONTROL_FEATURES, args.d_model)
 
+        self.LN1 = nn.LayerNorm(normalized_shape=(1, args.d_model))
+        self.LN2 = nn.LayerNorm(normalized_shape=(self.out_len, args.d_model))
+
         self.branch = nn.ModuleDict()
         if self.branch_layers == 1:
-            self.branch["LinM1"] = nn.Linear(args.d_model, self.num_pred_features * self.width)
+            self.branch["LinM1"] = nn.Linear(args.d_model * 2, self.num_pred_features * self.width)
         else:
-            self.branch["LinM1"] = nn.Linear(args.d_model, self.num_pred_features * self.width)
+            self.branch["LinM1"] = nn.Linear(args.d_model * 2, self.num_pred_features * self.width)
             self.branch["NonM1"] = nn.ReLU()
             for i in range(2, self.branch_layers):
                 self.branch["LinM{}".format(i)] = nn.Linear(self.num_pred_features * self.width, self.num_pred_features * self.width)
@@ -52,10 +55,12 @@ class DeepOLSTM(nn.Module):
     def forward(self, inp, spec, h=None):
         hidden1, _ = self.lstm(inp, h)
         hidden2 = self.spec_dense(spec)
+        hidden1 = self.LN1(hidden1[:, -1:, :])
+        hidden2 = self.LN2(hidden2)
 
-        hidden1 = repeat(hidden1[:, -1:, :], "bs l d -> bs (repeat l) d", repeat=self.out_len)
-        # x = torch.cat([hidden1, hidden2], dim=-1)
-        x = hidden1 + hidden2
+        hidden1 = repeat(hidden1, "bs l d -> bs (repeat l) d", repeat=self.out_len)
+        x = torch.cat([hidden1, hidden2], dim=-1)
+        # x = hidden1 + hidden2
 
         if self.branch_layers == 1:
             LinM = self.branch["LinM1"]

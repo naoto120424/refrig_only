@@ -28,24 +28,25 @@ class CFG:
 
 
 model_list = {
-    "LSTM",
-    "BaseTransformer",
-    "BaseTransformer_pred_token",
-    "BaseTransformer_decoder",
-    "BaseTransformer_sensor_first",
-    "BaseTransformer_3types_aete",
-    "BaseTransformer_3types_AgentAwareAttention",
-    "BaseTransformer_5types_AgentAwareAttention",
-    "BaseTransformer_individually_aete",
-    "BaseTransformer_individually_AgentAwareAttention",
-    "Transformer",
-    "Crossformer",
+    "lstm",
+    "bt",
+    "bt_pt",  # BaseTransformer_pred_token
+    "bt_d",  # BaseTransformer_decoder
+    "bt_sf",  # BaseTransformer_sensor_first
+    "bt_3_at",  # BaseTransformer_3types_aete
+    "bt_3_aaa",  # BaseTransformer_3types_AgentAwareAttention
+    "bt_5_aaa",  # BaseTransformer_5types_AgentAwareAttention
+    "bt_i_at",  # BaseTransformer_individually_aete
+    "bt_i_aaa",  # BaseTransformer_individually_AgentAwareAttention
+    "tf",
+    "cf",
     "Linear",
     "DLinear",
     "NLinear",
-    "DeepOTransformer",
     "DeepOLSTM",
-    "DeepOLSTM_v2",
+    "dot",
+    "dol",
+    "dol_v2",
     "s4",
     "s4d",
 }
@@ -76,41 +77,43 @@ def seed_everything(seed=42):
 
 # model decide from model name
 def modelDecision(args, cfg):
-    if "BaseTransformer" in args.model:
-        if args.model == "BaseTransformer":
+    if "bt" in args.model:
+        if args.model == "bt":
             from model.BaseTransformer.base_transformer import BaseTransformer
-        elif args.model == "BaseTransformer_pred_token":
+        elif args.model == "bt_pt":
             from model.BaseTransformer.base_transformer_pred_token import BaseTransformer
-        elif args.model == "BaseTransformer_decoder":
+        elif args.model == "bt_d":
             from model.BaseTransformer.BaseTransformer_decoder import BaseTransformer
-        elif args.model == "BaseTransformer_sensor_first":
+        elif args.model == "bt_sf":
             from model.BaseTransformer.base_transformer_sensor_first import BaseTransformer
-        elif args.model == "BaseTransformer_3types_aete":
+        elif args.model == "bt_3_at":
             from model.BaseTransformer.base_transformer_3types_aete import BaseTransformer
-        elif args.model == "BaseTransformer_3types_AgentAwareAttention":
+        elif args.model == "bt_3_aaa":
             from model.BaseTransformer.base_transformer_3types_AgentAwareAttention import BaseTransformer
-        elif args.model == "BaseTransformer_5types_AgentAwareAttention":
+        elif args.model == "bt_5_aaa":
             from model.BaseTransformer.base_transformer_5types_AAA import BaseTransformer
-        elif args.model == "BaseTransformer_individually_aete":
+        elif args.model == "bt_i_at":
             from model.BaseTransformer.base_transformer_individually_aete import BaseTransformer
-        elif args.model == "BaseTransformer_individually_AgentAwareAttention":
+        elif args.model == "bt_i_aaa":
             from model.BaseTransformer.base_transformer_individually_AgentAwareAttention import BaseTransformer
 
         return BaseTransformer(cfg, args)
 
-    if "Deep" in args.model:
-        if "DeepOTransformer" in args.model:
-            from model.DeepOTransformer.deepotransformer import DeepOTransformer
+    if "do" in args.model:
+        if "dot" in args.model:
+            from model.deepox.deepotransformer import DeepOTransformer
+
             return DeepOTransformer(cfg, args)
         elif args.model == "DeepOLSTM":
-            from model.DeepOTransformer.deepolstm import DeepOLSTM
-            return DeepOLSTM(cfg, args)
-        elif args.model == "DeepOLSTM_v2":
-            from model.DeepOTransformer.deepolstm_v2 import DeepOLSTM
+            from model.deepox.deepolstm import DeepOLSTM
 
             return DeepOLSTM(cfg, args)
-        elif args.model == "DeepONet":
-            from model.DeepOTransformer.deeponet import DeepONet
+        elif args.model == "dol_v2":
+            from model.deepox.deepolstm_v2 import DeepOLSTM
+
+            return DeepOLSTM(cfg, args)
+        elif args.model == "don":
+            from model.deepox.deeponet import DeepONet
 
             return DeepONet(cfg, args)
 
