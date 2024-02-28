@@ -26,7 +26,7 @@ def main():
     parser.add_argument("--bs", type=int, default=128, help="batch size")
     parser.add_argument("--train_epochs", type=int, default=100, help="train epochs")
     parser.add_argument("--learning_rate", type=float, default=1e-3, help="optimizer initial learning rate")
-    parser.add_argument("--criterion", type=str, default="MSE", help="criterion name. MSE / L1")
+    parser.add_argument("--criterion", type=str, default="mse", help="criterion name. MSE / L1")
 
     """ early stopping """
     parser.add_argument("--patience", type=int, default=10, help="early stopping patience")
@@ -86,8 +86,6 @@ def main():
     early_stopping = EarlyStopping(path=cfg.RESULT_PATH, patience=args.patience, delta=args.delta, verbose=True)
     epoch_num = args.train_epochs if not args.debug else 3
 
-    # model = torch.compile(model)  # For PyTorch2.0
-
     """Train"""
     print_model_summary(args, device, len(train_index_list), len(val_index_list))
     mlflow_summary(cfg, args)
@@ -105,9 +103,9 @@ def main():
 
             # train pred here
             if ("decoder" in args.model) or ("Crossformer" in args.model):
-                pred, _ = model(inp, spec, gt)
+                pred = model(inp, spec, gt)
             else:
-                pred, _ = model(inp, spec)
+                pred = model(inp, spec)
 
             loss = criterion(pred, gt)
             loss.backward()
@@ -128,9 +126,9 @@ def main():
 
                 # validation pred here
                 if ("decoder" in args.model) or ("Crossformer" in args.model):
-                    pred, _ = model(inp, spec, gt)
+                    pred = model(inp, spec, gt)
                 else:
-                    pred, _ = model(inp, spec)
+                    pred = model(inp, spec)
 
                 test_error = torch.mean(torch.abs(gt - pred))
                 epoch_test_error += test_error.item() * inp.size(0)
@@ -178,8 +176,6 @@ def main():
             for i in range(scaling_gt_data.shape[2]):  # ground truth scaling
                 scaling_gt_data[:, :, i] = (scaling_gt_data[:, :, i] - mean_list[i + cfg.NUM_CONTROL_FEATURES + 1]) / std_list[i + cfg.NUM_CONTROL_FEATURES + 1]
 
-            attn_all = []
-
             start_time = time.perf_counter()
 
             for i in range((gt_output_data.shape[0] - args.in_len) // args.out_len):
@@ -187,16 +183,12 @@ def main():
                 spec = torch.from_numpy(scaling_spec_data[i * args.out_len].astype(np.float32)).clone().unsqueeze(0).to(device)
 
                 if ("decoder" in args.model) or ("Crossformer" == args.model):
-                    scaling_pred_data, attn = model.predict_func(input, spec)
+                    scaling_pred_data = model.predict_func(input, spec)
                 else:
-                    scaling_pred_data, attn = model(input, spec)  # test pred here
+                    scaling_pred_data = model(input, spec)  # test pred here
                 scaling_pred_data = scaling_pred_data.detach().to("cpu").numpy().copy()[0]
                 new_scaling_input_data = np.concatenate([scaling_spec_data[i * args.out_len], scaling_pred_data], axis=1)
                 scaling_input_data = np.concatenate([scaling_input_data, new_scaling_input_data], axis=0)
-
-                # if "BaseTransformer" in args.model:
-                #     attn = attn.detach().to("cpu").numpy().copy()
-                #     attn_all.append(attn)
 
             end_time = time.perf_counter()
             predict_time_list.append(end_time - start_time)
@@ -207,19 +199,12 @@ def main():
             pred_data = pred_output_data[:, cfg.NUM_CONTROL_FEATURES :]
             scaling_pred_data = scaling_input_data[:, cfg.NUM_CONTROL_FEATURES :]
 
-            scaling_gt_data = np.zeros(gt_output_data.shape)
-            for i in range(np.array(gt_output_data).shape[1]):  # scaling ground truth data for visualization
-                scaling_gt_data[:, i] = (gt_output_data[:, i] - mean_list[i + cfg.NUM_CONTROL_FEATURES + 1]) / std_list[i + cfg.NUM_CONTROL_FEATURES + 1]
-
             gt_output_data = gt_output_data[: pred_data.shape[0]]
-            scaling_gt_data = scaling_gt_data[: pred_data.shape[0]]
 
-            eva.evaluation(args.in_len, gt_output_data, pred_data, case_name)
+            eva.evaluation(args.in_len, gt_output_data, pred_data)
             eva.visualization(gt_output_data, pred_data, case_name, cfg.RESULT_PATH)
-            eva.visualization(scaling_gt_data, scaling_pred_data, case_name, cfg.RESULT_PATH, is_normalized=True)
-            # eva.attention_visualization(args, attn_all, cfg.RESULT_PATH, case_name) if "BaseTransformer" in args.model else None
 
-    eva.save_evaluation(cfg.RESULT_PATH)
+    eva.save_evaluation()
     mlflow.log_metric(f"predict time mean", np.mean(predict_time_list))
     mlflow.log_artifacts(local_dir=cfg.RESULT_PATH, artifact_path="result")
     shutil.rmtree(cfg.RESULT_PATH)
