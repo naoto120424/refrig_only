@@ -1,11 +1,12 @@
 /schedule.py
 /confirm.py
-/train_al.py
+/al.py
 /test.png
 /model/DeepONet/
 /model/linear/
 /data_plot.py
 /data_plot/
 /data_plot_teacher/
+/hydra/
 
 __pycache__
