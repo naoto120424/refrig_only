@@ -1,13 +1,8 @@
 import torch
 from torch import nn
-import matplotlib.pyplot as plt
-import numpy as np
-import os, math
+import math
 
 from copy import deepcopy
-from einops import rearrange, repeat
-
-from model.BaseTransformer.spec_embed import SpecEmbedding
 
 
 def pair(t):
@@ -15,16 +10,13 @@ def pair(t):
 
 
 def clones(module, n):
-    # produce N identical layers.
     assert isinstance(module, nn.Module)
     return nn.ModuleList([deepcopy(module) for _ in range(n)])
 
 
-# classes
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=5000):
         super(PositionalEncoding, self).__init__()
-        # Compute the positional encodings once in log space.
         pe = torch.zeros(max_len, d_model).float()
         pe.requires_grad = False
 
@@ -38,15 +30,6 @@ class PositionalEncoding(nn.Module):
         self.register_buffer("pe", pe)
 
     def forward(self, x):
-        """
-        img_path = os.path.join("img", "inp_normal", "encoding")
-        os.makedirs(img_path, exist_ok=True)
-        pe = self.pe[:, : x.size(1)].to("cpu").detach().numpy().copy()
-        fig = plt.figure()
-        plt.imshow(pe[0])
-        plt.colorbar()
-        plt.savefig(f"img/inp_normal/encoding/time_encoding_input_norm_lookback{x.size(1)}.png")
-        """
         return self.pe[:, : x.size(1)]
 
 
@@ -56,15 +39,14 @@ class BaseTransformer(nn.Module):
 
         self.num_control_features = cfg.NUM_CONTROL_FEATURES
         self.num_pred_features = cfg.NUM_PRED_FEATURES
-        self.num_byproduct_features = cfg.NUM_BYPRODUCT_FEATURES
-        self.num_target_features = cfg.NUM_TARGET_FEATURES
         self.num_all_features = cfg.NUM_ALL_FEATURES
         self.in_len = args.in_len
         self.out_len = args.out_len
+        self.d_model = args.d_model
 
-        self.input_embedding = nn.Linear(self.num_all_features, args.d_model)
-        self.spec_embedding = SpecEmbedding(args.d_model, self.num_control_features)
-        self.positional_encoding = PositionalEncoding(args.d_model)  # 絶対位置エンコーディング
+        self.input_embedding = nn.Linear(self.num_all_features, self.d_model)
+        self.spec_embedding = nn.Linear(self.num_control_features, self.d_model)
+        self.positional_encoding = PositionalEncoding(self.d_model)
 
         self.dropout = nn.Dropout(args.dropout)
         encoder_layers = nn.TransformerEncoderLayer(
@@ -97,4 +79,4 @@ class BaseTransformer(nn.Module):
         for i, generator in enumerate(self.generators):
             x_final[:, i] = generator(x)
 
-        return x_final, None
+        return x_final

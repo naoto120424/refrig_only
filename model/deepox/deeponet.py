@@ -74,4 +74,4 @@ class DeepONet(nn.Module):
             y_out = torch.cat((spec[:, :t], y_out), dim=-1)
             y = torch.cat((y, y_out[:, -1:]), dim=1)
 
-        return y[:, 1:, self.num_control_features :], None
+        return y[:, 1:, self.num_control_features :]

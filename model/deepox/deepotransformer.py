@@ -1,13 +1,9 @@
 import torch
 from torch import nn
-import matplotlib.pyplot as plt
-import numpy as np
-import os, math
+import math
 
 from copy import deepcopy
-from einops import rearrange, repeat
-
-from model.BaseTransformer.spec_embed import SpecEmbedding
+from einops import rearrange
 
 
 def pair(t):
@@ -38,15 +34,6 @@ class PositionalEncoding(nn.Module):
         self.register_buffer("pe", pe)
 
     def forward(self, x):
-        """
-        img_path = os.path.join("img", "inp_normal", "encoding")
-        os.makedirs(img_path, exist_ok=True)
-        pe = self.pe[:, : x.size(1)].to("cpu").detach().numpy().copy()
-        fig = plt.figure()
-        plt.imshow(pe[0])
-        plt.colorbar()
-        plt.savefig(f"img/inp_normal/encoding/time_encoding_input_norm_lookback{x.size(1)}.png")
-        """
         return self.pe[:, : x.size(1)]
 
 
@@ -67,8 +54,8 @@ class DeepOTransformer(nn.Module):
         self.width = args.width
 
         self.input_embedding = nn.Linear(self.num_all_features, args.d_model)
-        self.spec_embedding = SpecEmbedding(args.d_model, self.num_control_features)
-        self.positional_encoding = PositionalEncoding(args.d_model)  # 絶対位置エンコーディング
+        self.spec_embedding = nn.Linear(self.num_control_features, args.d_model)
+        self.positional_encoding = PositionalEncoding(args.d_model)
 
         encoder_layers = nn.TransformerEncoderLayer(
             d_model=args.d_model,
@@ -135,4 +122,4 @@ class DeepOTransformer(nn.Module):
             y_out = torch.cat((spec[:, :t], y_out), dim=-1)
             y = torch.cat((y, y_out[:, -1:]), dim=1)
 
-        return y[:, 1:, self.num_control_features :], None
+        return y[:, 1:, self.num_control_features :]

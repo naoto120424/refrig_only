@@ -25,7 +25,7 @@ class LSTMClassifier(nn.Module):
             nn.Linear(self.num_hidden_units, self.num_hidden_units),
             nn.ReLU(inplace=True),
         )
-        
+
         self.generators = nn.ModuleList([])
         for _ in range(self.out_len):
             self.generators.append(
@@ -37,9 +37,9 @@ class LSTMClassifier(nn.Module):
         hidden2 = self.spec_dense(spec)
         y = self.linear(torch.cat([hidden1, hidden2], dim=1))
         y = y.mean(dim=1)
-        
+
         y_final = torch.zeros(x.shape[0], self.out_len, self.output_dim).to(x.device)
         for i, generator in enumerate(self.generators):
             y_final[:, i] = generator(y)
-            
-        return y_final, _
+
+        return y_final
