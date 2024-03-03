@@ -36,7 +36,7 @@ def main():
     parser.add_argument("--delta", type=float, default=0.0, help="early stopping delta")
 
     """ model """
-    parser.add_argument("--model", type=str, default="BaseTransformer", help="model name")
+    parser.add_argument("--model", type=str, default="bt", help="model name")
     parser.add_argument("--in_len", type=int, default=10, help="input length")
     parser.add_argument("--out_len", type=int, default=1, help="output length")
 
