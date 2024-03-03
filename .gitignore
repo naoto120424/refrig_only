@@ -1,13 +1,14 @@
-/schedule.py
-/confirm.py
-/al.py
-/test.png
-/model/DeepONet/
-/model/linear/
-/data_plot.py
 /data_plot/
 /data_plot_teacher/
-/hydra/
 /.vscode
 
 __pycache__
+
+/src/confirm.py
+/src/data_plot.py
+/src/schedule.py
+/src/al.py
+
+/src/model/Transformer/
+/src/model/linear/
+/src/model/s4/

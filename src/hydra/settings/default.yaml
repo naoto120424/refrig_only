@@ -1,0 +1,11 @@
+# 学習環境
+is_debug: False # デバッグモードかどうか
+seed: 42 # シード値
+epochs: 100 # エポック数
+batch_size: 128 # バッチサイズ
+lr: 0.001 # 学習率
+criterion: mse # 損失関数
+is_save_model: False # モデルを保存するかどうか(False推奨)
+
+# mlflow
+mlflow_exp_name: pytorch_lightning_test # mlflowのexperiment名

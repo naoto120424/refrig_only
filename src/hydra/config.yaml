@@ -1,0 +1,4 @@
+defaults:
+  - model: bt
+  - settings: default
+  - dataset: refrig_only

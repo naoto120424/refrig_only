@@ -1,0 +1,10 @@
+control_features: 15
+pred_features: 47
+byproduct_features: 40
+target_features: 7
+all_features: 62
+data_path: data_refrig_only
+
+data_size: 500 # 使用するデータ数
+val_size: 50 # 検証データ数
+test_size: 100 # テストデータ数

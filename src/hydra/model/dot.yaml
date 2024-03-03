@@ -1,0 +1,9 @@
+name: dot
+e_layers: 3
+d_model: 256
+dropout: 0.1
+n_heads: 8
+d_ff: 512
+trunk_layers: 3
+branch_layers: 3
+width: 128

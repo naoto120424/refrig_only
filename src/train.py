@@ -3,6 +3,8 @@ from torch.utils.data import DataLoader
 import numpy as np
 import time, datetime, os
 import mlflow, shutil, argparse
+import hydra
+from omegaconf import DictConfig
 
 from tqdm import tqdm
 from sklearn.model_selection import train_test_split
@@ -13,6 +15,7 @@ from utils.visualization import Eva, print_model_summary, mlflow_summary
 from utils.earlystopping import EarlyStopping
 
 
+# @hydra.main(config_path="hydra/config.yaml")
 def main():
     """parser"""
     parser = argparse.ArgumentParser(description="Mazda Refrigerant Circuit Project Step3")
@@ -197,7 +200,6 @@ def main():
             for i in range(pred_output_data.shape[1]):  # undo scaling
                 pred_output_data[:, i] = pred_output_data[:, i] * std_list[i + 1] + mean_list[i + 1]
             pred_data = pred_output_data[:, cfg.NUM_CONTROL_FEATURES :]
-            scaling_pred_data = scaling_input_data[:, cfg.NUM_CONTROL_FEATURES :]
 
             gt_output_data = gt_output_data[: pred_data.shape[0]]
 

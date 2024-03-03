@@ -1,0 +1,10 @@
+control_features: 9
+pred_features: 41
+byproduct_features: 37
+target_features: 4
+all_features: 50
+data_path: data_step2
+
+data_size: 294 # 使用するデータ数
+val_size: 29 # 検証データ数
+test_size: 59 # テストデータ数
