@@ -8,5 +8,6 @@
 /data_plot/
 /data_plot_teacher/
 /hydra/
+/.vscode
 
 __pycache__
