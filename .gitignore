@@ -2,7 +2,7 @@
 /data_plot_teacher/
 /.vscode
 
-.pdm-python
+/.pdm-python
 __pycache__
 
 /src/confirm.py
