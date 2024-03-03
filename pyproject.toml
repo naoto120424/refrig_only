@@ -5,7 +5,11 @@ description = "Default template for PDM package"
 authors = [
     {name = "naoto120424", email = "naotonaka0424@gmail.com"},
 ]
-dependencies = []
+dependencies = [
+    "pytorch>=1.0.2",
+    "torch>=2.2.1",
+    "pytorch-lightning>=2.2.0.post0",
+]
 requires-python = ">=3.8"
 readme = "README.md"
 license = {text = "MIT"}
