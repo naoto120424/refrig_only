@@ -56,14 +56,17 @@ def deviceDecision():
         return "cpu"
 
 
-# seed
-def seed_everything(seed=42):
+def seed_everything(seed: int = 42) -> None:
+    """
+    ランダムシードを設定し、再現性を担保するために必要な関数。
+    """
     random.seed(seed)
     os.environ["PYTHONHASHSEED"] = str(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 
 # model decide from model name
@@ -77,4 +80,4 @@ def modelDecision(args, cfg):
     elif args.model == "dol":
         return DeepOLSTM(cfg, args)
 
-    raise ValueError("存在しないモデル名が指定されました")
+    raise ValueError("unknown model name")
