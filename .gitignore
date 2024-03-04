@@ -2,6 +2,7 @@
 /.vscode
 
 .pdm-python
+Dockerfile
 __pycache__
 
 /src/confirm.py
