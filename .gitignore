@@ -9,6 +9,8 @@ __pycache__
 /src/schedule.py
 /src/al.py
 
-/src/model/Transformer/
 /src/model/linear/
 /src/model/s4/
+
+/al/model/linear/
+/al/model/s4/
