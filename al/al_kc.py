@@ -18,14 +18,13 @@ from utils.dataloader import load_data, create_dataset
 from utils.visualization import Eva, print_model_summary, mlflow_summary
 from utils.earlystopping import EarlyStopping
 
-from model.module.module import LossPred_Module
-
-from query.kcenter import kcenter
-from query.learning_loss import learning_loss
-from query.random_sampling import random_sampling
+from model.s4.s4d import S4D
 
 
-def main(data, csv_files, n_query, args, cfg, train_index_list, val_index_list, test_index_list):
+def main(data, csv_files, args, cfg, rate, train_index_list, val_index_list, test_index_list, model_train_index_list, n_add):
+    if os.path.isdir(cfg.RESULT_PATH):
+        shutil.rmtree(cfg.RESULT_PATH)
+
     """Prepare"""
     seed_everything(seed=args.seed)
     eva = Eva(data)
@@ -40,15 +39,10 @@ def main(data, csv_files, n_query, args, cfg, train_index_list, val_index_list, 
     model = modelDecision(args, cfg)
     model.to(device)
 
-    if n_query == "ll":
-        module = LossPred_Module(args, cfg)
-        module.to(device)
-
     criterion = criterion_list[args.criterion]
-    ll_criterion = criterion_list["l1"]
     optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
     early_stopping = EarlyStopping(patience=args.patience, delta=args.delta, verbose=True, path=cfg.RESULT_PATH)
-    epoch_num = args.train_epochs
+    epoch_num = args.train_epochs if not args.debug else 3
 
     """Train"""
     print_model_summary(args, device, len(train_index_list), len(val_index_list))
@@ -66,15 +60,12 @@ def main(data, csv_files, n_query, args, cfg, train_index_list, val_index_list, 
             gt = batch["gt"].to(device)
 
             # train pred here
-            pred, ll_pred = model(inp, spec)
+            if ("decoder" in args.model) or ("Crossformer" in args.model):
+                pred = model(inp, spec, gt)
+            else:
+                pred = model(inp, spec)
 
             loss = criterion(pred, gt)
-            print(loss.size)
-
-            if n_query == "ll":
-                gt_loss = loss.clone().detach().requires_grad_(True)
-                loss_ll = ll_criterion()
-
             loss.backward()
 
             epoch_loss += loss.item() * inp.size(0)
@@ -93,9 +84,9 @@ def main(data, csv_files, n_query, args, cfg, train_index_list, val_index_list, 
 
                 # validation pred here
                 if ("decoder" in args.model) or ("Crossformer" in args.model):
-                    pred, _ = model(inp, spec, gt)
+                    pred = model(inp, spec, gt)
                 else:
-                    pred, _ = model(inp, spec)
+                    pred = model(inp, spec)
 
                 test_error = torch.mean(torch.abs(gt - pred))
                 epoch_test_error += test_error.item() * inp.size(0)
@@ -127,9 +118,6 @@ def main(data, csv_files, n_query, args, cfg, train_index_list, val_index_list, 
 
         ade_list = []
 
-        if args.debug:
-            test_index_list = test_index_list[:3]
-
         for test_index in tqdm(test_index_list):
             case_name = f"case{str(test_index+1).zfill(4)}"
 
@@ -155,9 +143,9 @@ def main(data, csv_files, n_query, args, cfg, train_index_list, val_index_list, 
                 spec = torch.from_numpy(scaling_spec_data[i * args.out_len].astype(np.float32)).clone().unsqueeze(0).to(device)
 
                 if ("decoder" in args.model) or ("Crossformer" == args.model):
-                    scaling_pred_data, _ = model.predict_func(input, spec)
+                    scaling_pred_data = model.predict_func(input, spec)
                 else:
-                    scaling_pred_data, _ = model(input, spec)  # test pred here
+                    scaling_pred_data = model(input, spec)  # test pred here
                 scaling_pred_data = scaling_pred_data.detach().to("cpu").numpy().copy()[0]
                 new_scaling_input_data = np.concatenate([scaling_spec_data[i * args.out_len], scaling_pred_data], axis=1)
                 scaling_input_data = np.concatenate([scaling_input_data, new_scaling_input_data], axis=0)
@@ -180,28 +168,79 @@ def main(data, csv_files, n_query, args, cfg, train_index_list, val_index_list, 
             eva.visualization(gt_output_data, pred_data, case_name, cfg.RESULT_PATH)
 
     eva.save_evaluation()
-
-    shutil.rmtree(early_stopping.path)
-    if n_query == "ll":
-        shutil.rmtree(early_stopping.module_path)
-
     mlflow.log_metric(f"predict time mean", np.mean(predict_time_list))
     mlflow.log_artifacts(local_dir=cfg.RESULT_PATH, artifact_path="result")
     shutil.rmtree(cfg.RESULT_PATH)
     mlflow.end_run()
     print("----------------------------------------------")
     print(f"Predict Time: {np.mean(predict_time_list)} [s]\n")
-    print("Experiment End")
+    print("Experiment End\n")
 
-    return ade_list
+    print("query select start")
+    print("----------------------------------------------")
+
+    if rate > 0.85:
+        return ade_list, train_index_list, model_train_index_list
+    else:
+        labeled_dataset = torch.Tensor().cuda()
+        unlabeled_dataset = torch.Tensor().cuda()
+
+        selection = list()
+
+        for labeled_index in tqdm(train_index_list):
+            # x = torch.from_numpy(data["spec"][labeled_index].astype(np.float32)).clone()
+            temp_inp = torch.flatten(torch.from_numpy(data["inp"][labeled_index].astype(np.float32)).clone(), start_dim=1)[:1]
+            temp_spec = torch.flatten(torch.from_numpy(data["spec"][labeled_index].astype(np.float32)).clone(), start_dim=1)[:1]
+            temp_dataset = torch.cat([temp_inp, temp_spec], dim=1).cuda()
+
+            labeled_dataset = torch.cat([labeled_dataset, temp_dataset], dim=0)  # (unlabeled dataset size, 12*40*40*20+7)
+            # print(labeled_index, labeled_dataset.size())
+
+        for unlabeled_index in tqdm(model_train_index_list):
+            temp_inp = torch.flatten(torch.from_numpy(data["inp"][unlabeled_index].astype(np.float32)).clone(), start_dim=1)[:1]
+            temp_spec = torch.flatten(torch.from_numpy(data["spec"][unlabeled_index].astype(np.float32)).clone(), start_dim=1)[:1]
+            temp_dataset = torch.cat([temp_inp, temp_spec], dim=1).cuda()
+            # print(data["inp"][unlabeled_index].shape, temp_inp.shape, temp_spec.shape)
+
+            unlabeled_dataset = torch.cat([unlabeled_dataset, temp_dataset], dim=0)  # (unlabeled dataset size, 12*40*40*20+7)
+            # print(unlabeled_index, unlabeled_dataset.size())
+
+        temp_dataset = torch.cat([unlabeled_dataset, labeled_dataset], dim=0)  # (unlabeled dataset size + labeled dataset size, 12*40*40*20+7)
+        # print(temp_dataset.size())
+        distance_mat = np.array(torch.matmul(temp_dataset, temp_dataset.transpose(0, -1)).cpu())
+        diagonal = np.array(distance_mat.diagonal().reshape((1, -1)))
+
+        distance_mat *= -2
+        distance_mat += diagonal
+        distance_mat += diagonal.transpose()
+
+        temp_mat = distance_mat[: len(model_train_index_list), len(model_train_index_list) :]  # (unlabeled dataset size, labeled dataset size)
+
+        for _ in tqdm(range(n_add)):
+            temp_selection = np.argmax(temp_mat.min(axis=1))
+
+            temp_mat = np.concatenate([temp_mat, distance_mat[: len(model_train_index_list), temp_selection].reshape((-1, 1))], axis=1)
+
+            selection.append(temp_selection)
+
+        # loss_pred_index = np.argsort(loss_pred_index)
+        # loss_pred_index = loss_pred_index[-n_add:]
+        train_index_list = np.concatenate([train_index_list, selection], axis=0)
+        model_train_index_list = np.delete(model_train_index_list, selection)
+
+        # print("length: ", len(train_index_list), len(model_train_index_list))
+
+    print("----------------------------------------------")
+
+    return ade_list, train_index_list, model_train_index_list
 
 
 if __name__ == "__main__":
     """parser"""
-    parser = argparse.ArgumentParser(description="Mazda Refrigerant Circuit Project AlctiveLearning")
+    parser = argparse.ArgumentParser(description="Mazda Refrigerant Circuit Project Step3")
 
     """ exp setting """
-    parser.add_argument("--e_name", type=str, default="Active Learning", help="experiment name")
+    parser.add_argument("--e_name", type=str, default="Refrigerant Only", help="experiment name")
     parser.add_argument("--dataset", type=str, default="refrig_only", help="dataset. refrig_only / teacher")
     parser.add_argument("--seed", type=int, default=42, help="seed")
     parser.add_argument("--debug", type=bool, default=False, help="debug")
@@ -243,16 +282,15 @@ if __name__ == "__main__":
 
     cfg = CFG(args)
 
-    if not args.debug:
-        rate_list = np.arange(0.10, 1.01, 0.10)
-        model_list = ["lstm", "bt", "dot", "dol"]
-        query_list = ["rs", "ll", "kc"]
-    else:
-        rate_list = np.arange(0.10, 0.21, 0.10)
-        model_list = ["lstm"]
-        query_list = ["rs"]
-
     data, csv_files = load_data(cfg, args.dataset, in_len=args.in_len, out_len=args.out_len, debug=args.debug)
+    # print(csv_files)
+
+    rate_list = np.arange(0.10, 1.01, 0.10)
+    # rate_list = np.arange(0.10, 0.21, 0.10)
+    model_list = ["lstm", "bt", "dot", "dol"]
+    # model_list = ["lstm", "bt"]
+    mean_list = []
+    std_list = []
 
     n_list = []
     ade_list = []
@@ -262,80 +300,60 @@ if __name__ == "__main__":
     train_index_list, test_index_list = train_test_split(data_list, test_size=0.2)
     train_index_list, val_index_list = train_test_split(train_index_list, test_size=0.1)
 
-    _, mean_list, std_list = create_dataset(cfg, args.dataset, data, train_index_list, csv_files, is_train=True)
+    model_train_index_list = deepcopy(train_index_list)
+    train_index_list_first = random.sample(model_train_index_list, int(len(train_index_list) * 0.1))
+    model_train_index_list_first = list(set(model_train_index_list).difference(set(train_index_list_first)))
 
-    n_add = int(len(train_index_list) * 0.1)
+    for model in model_list:
+        model_train_index_list = deepcopy(train_index_list)
+        train_index_list_tmp = []
+        args.model = model
 
-    unlabeled_indices_first = deepcopy(train_index_list)
-    labeled_indices_first = random.sample(unlabeled_indices_first, n_add)
-    unlabeled_indices_first = list(np.delete(unlabeled_indices_first, labeled_indices_first))
+        if model == "dol":
+            args.width = 64
+        for rate in rate_list:
+            if rate < 0.15:
+                train_index_list_tmp = deepcopy(train_index_list_first)
+                model_train_index_list = deepcopy(model_train_index_list_first)
+            elif rate > 0.95:
+                train_index_list_tmp = deepcopy(train_index_list)
 
-    for query in query_list:
-        for model in model_list:
-            labeled_indices = deepcopy(labeled_indices_first)
-            unlabeled_indices = deepcopy(unlabeled_indices_first)
+            n_list.append(len(train_index_list_tmp))
 
-            for rate in rate_list:
-                if rate > 0.95:
-                    unlabeled_indices = []
-                    labeled_indices = deepcopy(train_index_list)
+            ade_list_tmp, train_index_list_tmp, model_train_index_list = main(data, csv_files, args, cfg, rate, train_index_list_tmp, val_index_list, test_index_list, model_train_index_list, int(len(train_index_list) * 0.1))
+            ade_list.append(ade_list_tmp)
+        print(n_list)
 
-                n_list.append(len(labeled_indices))
+    print(ade_list)
 
-                print(f"Query: {query}, Model: {model}, Rate: {rate}")
-                args.model = model
-                if model == "dol":
-                    args.width = 64
-                ade_list_tmp = main(data, csv_files, args, cfg, labeled_indices, val_index_list, test_index_list)
-                ade_list.append(ade_list_tmp)
+    np.save("np_save_al_kc", np.array(ade_list))
 
-                if query == "rs":
-                    labeled_indices, unlabeled_indices = random_sampling(labeled_indices, unlabeled_indices, n_add)
-                elif query == "kc":
-                    labeled_indices, unlabeled_indices = kcenter(data, labeled_indices, unlabeled_indices)
-                elif query == "ll":
-                    labeled_indices, unlabeled_indices = learning_loss(
-                        args=args,
-                        cfg=cfg,
-                        device=deviceDecision(),
-                        model_path=os.path.join(cfg.RESULT_PATH, "best_model.pth"),
-                        module_path=os.path.join(cfg.RESULT_PATH, "module.pth"),
-                        data=data,
-                        mean_list=mean_list,
-                        std_list=std_list,
-                        labeled_indices=labeled_indices,
-                        unlabeled_indices=unlabeled_indices,
-                    )
+    df_LSTM = pd.DataFrame({f"{n_list[i]}": np.array(ade_list[i * len(model_list)]) for i in range(len(rate_list))})
+    df_LSTM_melt = pd.melt(df_LSTM)
+    df_LSTM_melt["species"] = "LSTM"
 
-    print(np.array(ade_list).shape)
-    np.save("al", np.array(ade_list))
+    df_Transformer = pd.DataFrame({f"{n_list[i]}": np.array(ade_list[i * len(model_list) + 1]) for i in range(len(rate_list))})
+    df_Transformer_melt = pd.melt(df_Transformer)
+    df_Transformer_melt["species"] = "Transformer"
 
-    # df_LSTM = pd.DataFrame({f"{n_list[i]}": np.array(ade_list[i * len(model_list)]) for i in range(len(rate_list))})
-    # df_LSTM_melt = pd.melt(df_LSTM)
-    # df_LSTM_melt["species"] = "LSTM"
+    df_dot = pd.DataFrame({f"{n_list[i]}": np.array(ade_list[i * len(model_list) + 2]) for i in range(len(rate_list))})
+    df_dot_melt = pd.melt(df_dot)
+    df_dot_melt["species"] = "DeepOTransformer"
 
-    # df_Transformer = pd.DataFrame({f"{n_list[i]}": np.array(ade_list[i * len(model_list) + 1]) for i in range(len(rate_list))})
-    # df_Transformer_melt = pd.melt(df_Transformer)
-    # df_Transformer_melt["species"] = "Transformer"
+    df_dol = pd.DataFrame({f"{n_list[i]}": np.array(ade_list[i * len(model_list) + 3]) for i in range(len(rate_list))})
+    df_dol_melt = pd.melt(df_dol)
+    df_dol_melt["species"] = "DeepOLSTM"
 
-    # df_dot = pd.DataFrame({f"{n_list[i]}": np.array(ade_list[i * len(model_list) + 2]) for i in range(len(rate_list))})
-    # df_dot_melt = pd.melt(df_dot)
-    # df_dot_melt["species"] = "DeepOTransformer"
-
-    # df_dol = pd.DataFrame({f"{n_list[i]}": np.array(ade_list[i * len(model_list) + 3]) for i in range(len(rate_list))})
-    # df_dol_melt = pd.melt(df_dol)
-    # df_dol_melt["species"] = "DeepOLSTM"
-
-    # df = pd.concat([df_LSTM_melt, df_Transformer_melt, df_dot_melt, df_dol_melt], axis=0)
+    df = pd.concat([df_LSTM_melt, df_Transformer_melt, df_dot_melt, df_dol_melt], axis=0)
     # df = pd.concat([df_LSTM_melt, df_Transformer_melt], axis=0)
-    # print(df.head())
+    print(df.head())
 
-    # fig = plt.figure()
-    # ax = fig.add_subplot(1, 1, 1)
-    # sns.boxplot(x="variable", y="value", data=df_LSTM_melt, hue="species", palette="Dark2", ax=ax)
+    fig = plt.figure()
+    ax = fig.add_subplot(1, 1, 1)
+    sns.boxplot(x="variable", y="value", data=df, hue="species", palette="Dark2", ax=ax)
 
-    # ax.set_xlabel("Number of training sequences used")
-    # ax.set_ylabel(f"ACDS_kW[kW] ADE for {len(test_index_list)} test data")
-    # ax.legend(loc="best")
+    ax.set_xlabel("Number of training sequences used")
+    ax.set_ylabel(f"ACDS_kW[kW] ADE for {len(test_index_list)} test data")
+    ax.legend(loc="best")
 
-    # plt.savefig("al_lstm.png")
+    plt.savefig("al_KCenter.png")

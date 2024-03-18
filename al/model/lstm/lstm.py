@@ -42,4 +42,4 @@ class LSTMClassifier(nn.Module):
         for i, generator in enumerate(self.generators):
             y_final[:, i] = generator(y)
 
-        return y_final
+        return y_final, y

@@ -79,4 +79,4 @@ class BaseTransformer(nn.Module):
         for i, generator in enumerate(self.generators):
             x_final[:, i] = generator(x)
 
-        return x_final
+        return x_final, x

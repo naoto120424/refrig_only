@@ -117,9 +117,13 @@ class DeepOTransformer(nn.Module):
                 y_out = NonM(LinM(y_out))
 
             y_out = rearrange(y_out, "bs l (n d) -> bs l n d", n=self.num_pred_features)
+            y_ll_pred = y_out
             y_out = torch.sum(x[:, :t] * y_out, dim=-1, keepdim=False) + self.params["bias"]
 
             y_out = torch.cat((spec[:, :t], y_out), dim=-1)
             y = torch.cat((y, y_out[:, -1:]), dim=1)
 
-        return y[:, 1:, self.num_control_features :]
+        ll_pred = torch.cat((x, y_ll_pred), dim=1)
+        ll_pred = rearrange(ll_pred, "bs l n d -> bs (l n d)")
+
+        return y[:, 1:, self.num_control_features :], ll_pred
