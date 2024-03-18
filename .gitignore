@@ -15,3 +15,7 @@ __pycache__
 
 /al/model/linear/
 /al/model/s4/
+# /al/
+/LearningLoss/
+
+*.npy
