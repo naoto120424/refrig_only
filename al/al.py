@@ -219,7 +219,7 @@ if __name__ == "__main__":
     parser.add_argument("--debug", type=bool, default=False, help="debug")
 
     parser.add_argument("--bs", type=int, default=512, help="batch size")
-    parser.add_argument("--train_epochs", type=int, default=10, help="train epochs")
+    parser.add_argument("--train_epochs", type=int, default=100, help="train epochs")
     parser.add_argument("--learning_rate", type=float, default=1e-3, help="optimizer initial learning rate")
     parser.add_argument("--criterion", type=str, default="mse", help="criterion name. MSE / L1")
 
@@ -253,12 +253,13 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    seed_everything(seed=args.seed)
     cfg = CFG(args)
 
     if not args.debug:
         rate_list = np.arange(0.10, 1.01, 0.10)
         model_list = ["lstm", "bt", "dot", "dol"]
-        query_list = ["rs", "ll", "kc"]
+        query_list = ["ll", "rs", "kc"]
     else:
         rate_list = np.arange(0.10, 0.21, 0.10)
         model_list = ["lstm"]
@@ -288,10 +289,6 @@ if __name__ == "__main__":
             unlabeled_indices = deepcopy(unlabeled_indices_first)
 
             for rate in rate_list:
-                if rate > 0.95:
-                    unlabeled_indices = []
-                    labeled_indices = deepcopy(train_index_list)
-
                 n_list.append(len(labeled_indices))
 
                 print(f"\n\nQuery: {query}, Model: {model}, Rate: {rate}")
@@ -301,7 +298,7 @@ if __name__ == "__main__":
                 ade_list_tmp = main(data, csv_files, query, args, cfg, labeled_indices, val_index_list, test_index_list)
                 ade_list.append(ade_list_tmp)
 
-                if rate < 0.95:
+                if rate < 0.85:
                     if query == "rs":
                         labeled_indices, unlabeled_indices = random_sampling(labeled_indices, unlabeled_indices, n_add)
                     elif query == "kc":
@@ -319,6 +316,10 @@ if __name__ == "__main__":
                             labeled_indices=labeled_indices,
                             unlabeled_indices=unlabeled_indices,
                         )
+                elif rate < 0.95:
+                    unlabeled_indices = []
+                    labeled_indices = deepcopy(train_index_list)
+
                 shutil.rmtree("saved_model")
 
     print(f"\n\nade_list shape: {np.array(ade_list).shape}")
