@@ -301,23 +301,24 @@ if __name__ == "__main__":
                 ade_list_tmp = main(data, csv_files, query, args, cfg, labeled_indices, val_index_list, test_index_list)
                 ade_list.append(ade_list_tmp)
 
-                if query == "rs":
-                    labeled_indices, unlabeled_indices = random_sampling(labeled_indices, unlabeled_indices, n_add)
-                elif query == "kc":
-                    labeled_indices, unlabeled_indices = kcenter(data, labeled_indices, unlabeled_indices)
-                elif query == "ll":
-                    labeled_indices, unlabeled_indices = learning_loss(
-                        args=args,
-                        cfg=cfg,
-                        device=deviceDecision(),
-                        model_path=os.path.join("saved_model", "best_model.pth"),
-                        module_path=os.path.join("saved_model", "module.pth"),
-                        data=data,
-                        mean_list=mean_list,
-                        std_list=std_list,
-                        labeled_indices=labeled_indices,
-                        unlabeled_indices=unlabeled_indices,
-                    )
+                if rate < 0.95:
+                    if query == "rs":
+                        labeled_indices, unlabeled_indices = random_sampling(labeled_indices, unlabeled_indices, n_add)
+                    elif query == "kc":
+                        labeled_indices, unlabeled_indices = kcenter(data, labeled_indices, unlabeled_indices)
+                    elif query == "ll":
+                        labeled_indices, unlabeled_indices = learning_loss(
+                            args=args,
+                            cfg=cfg,
+                            device=deviceDecision(),
+                            model_path=os.path.join("saved_model", "best_model.pth"),
+                            module_path=os.path.join("saved_model", "module.pth"),
+                            data=data,
+                            mean_list=mean_list,
+                            std_list=std_list,
+                            labeled_indices=labeled_indices,
+                            unlabeled_indices=unlabeled_indices,
+                        )
                 shutil.rmtree("saved_model")
 
     print(f"\n\nade_list shape: {np.array(ade_list).shape}")
