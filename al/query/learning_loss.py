@@ -20,7 +20,7 @@ def learning_loss(
     labeled_indices,
     unlabeled_indices,
 ):
-    print("Learning Loss Algorithm Start")
+    print("\n\nLearning Loss Algorithm Start")
     print("----------------------------------------------")
     with torch.no_grad():
         n_add = int((len(labeled_indices) + len(unlabeled_indices)) * 0.1)
@@ -30,6 +30,9 @@ def learning_loss(
         model.load_state_dict(torch.load(model_path))
         module.load_state_dict(torch.load(module_path))
 
+        model.to(device)
+        module.to(device)
+
         model.eval()
         module.eval()
 
@@ -38,7 +41,6 @@ def learning_loss(
         for unlabeled_index in unlabeled_indices:
             inp_data = data["inp"][unlabeled_index]  # shape(3299-(in_len+out_len), in_len, num_all_features)
             spec_data = data["spec"][unlabeled_index]  # shape(3299-(in_len+out_len), out_len, num_control_features)
-            gt_output_data = data["gt_data"][unlabeled_index]
 
             scaling_input_data = inp_data[0].copy()  # shape(in_len, num_all_features)
             scaling_spec_data = spec_data.copy()
@@ -47,9 +49,8 @@ def learning_loss(
             for i in range(scaling_spec_data.shape[2]):  # spec scaling
                 scaling_spec_data[:, :, i] = (scaling_spec_data[:, :, i] - mean_list[i + 1]) / std_list[i + 1]
 
-            print("gt_output_data.shape[0]: ", gt_output_data.shape[0], ", inp_data.shape[0]: ", inp_data.shape[0])
             loss_pred_list = []
-            for i in range((gt_output_data.shape[0] - args.in_len) // args.out_len):
+            for i in range(inp_data.shape[0] // args.out_len):
                 input = torch.from_numpy(scaling_input_data[-args.in_len :].astype(np.float32)).clone().unsqueeze(0).to(device)
                 spec = torch.from_numpy(scaling_spec_data[i * args.out_len].astype(np.float32)).clone().unsqueeze(0).to(device)
 
@@ -65,15 +66,15 @@ def learning_loss(
 
             loss_pred_index.append(np.mean(np.array(loss_pred_list)))
 
-        print(labeled_indices)
-        print(unlabeled_indices)
         loss_pred_index = np.argsort(loss_pred_index)
         loss_pred_index = loss_pred_index[-n_add:]
-        selection = unlabeled_indices[loss_pred_index]
+
+        selection = []
+        for select in loss_pred_index:
+            selection.append(unlabeled_indices[select])
+
         labeled_indices = np.concatenate([labeled_indices, selection], axis=0)
-        unlabeled_indices = np.delete(unlabeled_indices, selection)
-        print(labeled_indices)
-        print(unlabeled_indices)
+        unlabeled_indices = [i for i in unlabeled_indices if i not in selection]
 
     print("----------------------------------------------")
     print("Learning Loss Algorithm End")
