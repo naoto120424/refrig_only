@@ -294,7 +294,7 @@ if __name__ == "__main__":
 
                 n_list.append(len(labeled_indices))
 
-                print(f"Query: {query}, Model: {model}, Rate: {rate}")
+                print(f"\n\nQuery: {query}, Model: {model}, Rate: {rate}")
                 args.model = model
                 if model == "dol":
                     args.width = 64
