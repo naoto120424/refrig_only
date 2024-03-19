@@ -114,11 +114,13 @@ def print_model_summary(args, device, len_train_index, len_val_index):
         print(f" - width         : {args.width}")
 
 
-def mlflow_summary(cfg, args):
+def mlflow_summary(cfg, args, n_query, len_train_index):
     mlflow.set_tracking_uri(cfg.MLFLOW_PATH)
     mlflow.set_experiment(args.e_name)
     mlflow.start_run()
     mlflow.log_param("dataset", args.dataset)
+    mlflow.log_param("query", n_query)
+    mlflow.log_param("n_train", len_train_index)
     mlflow.log_param("model", args.model)
     mlflow.log_param("debug", args.debug)
     mlflow.log_param("seed", args.seed)
