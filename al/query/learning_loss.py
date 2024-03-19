@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+from tqdm import tqdm
 
 from model.module.module import LossPred_Module
 from utils.utils import CFG, criterion_list, predict_time_list, deviceDecision, seed_everything, modelDecision
@@ -38,7 +39,7 @@ def learning_loss(
 
         loss_pred_index = []
 
-        for unlabeled_index in unlabeled_indices:
+        for unlabeled_index in tqdm(unlabeled_indices):
             inp_data = data["inp"][unlabeled_index]  # shape(3299-(in_len+out_len), in_len, num_all_features)
             spec_data = data["spec"][unlabeled_index]  # shape(3299-(in_len+out_len), out_len, num_control_features)
 
