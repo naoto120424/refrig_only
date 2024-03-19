@@ -4,6 +4,7 @@ from torch import nn
 
 class LossPred_Module(nn.Module):
     def __init__(self, args, cfg):
+        super(LossPred_Module, self).__init__()
         self.num_pred_features = cfg.NUM_PRED_FEATURES
         self.out_len = args.out_len
         self.d_model = args.d_model
