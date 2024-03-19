@@ -44,20 +44,29 @@ def main(data, csv_files, n_query, args, cfg, train_index_list, val_index_list, 
         module = LossPred_Module(args, cfg)
         module.to(device)
 
+        gt_loss_mse = torch.nn.MSELoss(reduction="none")
+        ll_criterion = criterion_list["l1"]
+        module_optimizer = torch.optim.SGD(module.parameters(), lr=1e-3)
+
     criterion = criterion_list[args.criterion]
-    ll_criterion = criterion_list["l1"]
     optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
-    early_stopping = EarlyStopping(patience=args.patience, delta=args.delta, verbose=True, path=cfg.RESULT_PATH)
+
+    is_ll = n_query == "ll"
+    early_stopping = EarlyStopping(path="saved_model", patience=args.patience, verbose=True, delta=args.delta, is_ll=is_ll)
     epoch_num = args.train_epochs
 
     """Train"""
     print_model_summary(args, device, len(train_index_list), len(val_index_list))
-    mlflow_summary(cfg, args)
+    mlflow_summary(cfg, args, n_query, len(train_index_list))
     train_start_time = time.perf_counter()
     for epoch in range(1, epoch_num + 1):
         print("----------------------------------------------")
         print(f"[Epoch {epoch}]")
         model.train()
+
+        if n_query == "ll":
+            module.train()
+
         epoch_loss = 0.0
         for batch in tqdm(train_dataloader):
             optimizer.zero_grad()
@@ -69,13 +78,19 @@ def main(data, csv_files, n_query, args, cfg, train_index_list, val_index_list, 
             pred, ll_pred = model(inp, spec)
 
             loss = criterion(pred, gt)
-            print(loss.size)
 
             if n_query == "ll":
-                gt_loss = loss.clone().detach().requires_grad_(True)
-                loss_ll = ll_criterion()
+                module_optimizer.zero_grad()
+                ll_pred = module(ll_pred)
 
-            loss.backward()
+                gt_loss = gt_loss_mse(pred, gt)
+                gt_loss = torch.mean(gt_loss, dim=-1)
+
+                loss_ll = ll_criterion(ll_pred, gt_loss.detach())
+                loss_ll.backward(retain_graph=True)
+                module_optimizer.step()
+
+            loss.backward(retain_graph=True)
 
             epoch_loss += loss.item() * inp.size(0)
             optimizer.step()
@@ -92,10 +107,7 @@ def main(data, csv_files, n_query, args, cfg, train_index_list, val_index_list, 
                 gt = batch["gt"].to(device)
 
                 # validation pred here
-                if ("decoder" in args.model) or ("Crossformer" in args.model):
-                    pred, _ = model(inp, spec, gt)
-                else:
-                    pred, _ = model(inp, spec)
+                pred, _ = model(inp, spec)
 
                 test_error = torch.mean(torch.abs(gt - pred))
                 epoch_test_error += test_error.item() * inp.size(0)
@@ -107,7 +119,8 @@ def main(data, csv_files, n_query, args, cfg, train_index_list, val_index_list, 
         mlflow.log_metric(f"val loss", epoch_test_error, step=epoch)
 
         os.makedirs(cfg.RESULT_PATH, exist_ok=True)
-        early_stopping(epoch_test_error, model, epoch)
+        os.makedirs("saved_model", exist_ok=True)
+        early_stopping(epoch_test_error, model, epoch) if not is_ll else early_stopping(epoch_test_error, model, epoch, module)
         if early_stopping.early_stop:
             break
 
@@ -120,15 +133,18 @@ def main(data, csv_files, n_query, args, cfg, train_index_list, val_index_list, 
 
     """Test"""
     with torch.no_grad():
+        if args.debug:
+            test_index_list = test_index_list[:3]
         print(f"\n\nTest Start. Case Num: {len(test_index_list)}")
         print("----------------------------------------------")
         model.load_state_dict(torch.load(early_stopping.path))
         model.eval()
 
-        ade_list = []
+        if n_query == "ll":
+            module.load_state_dict(torch.load(early_stopping.module_path))
+            module.eval()
 
-        if args.debug:
-            test_index_list = test_index_list[:3]
+        ade_list = []
 
         for test_index in tqdm(test_index_list):
             case_name = f"case{str(test_index+1).zfill(4)}"
@@ -180,10 +196,6 @@ def main(data, csv_files, n_query, args, cfg, train_index_list, val_index_list, 
             eva.visualization(gt_output_data, pred_data, case_name, cfg.RESULT_PATH)
 
     eva.save_evaluation()
-
-    shutil.rmtree(early_stopping.path)
-    if n_query == "ll":
-        shutil.rmtree(early_stopping.module_path)
 
     mlflow.log_metric(f"predict time mean", np.mean(predict_time_list))
     mlflow.log_artifacts(local_dir=cfg.RESULT_PATH, artifact_path="result")
@@ -250,7 +262,7 @@ if __name__ == "__main__":
     else:
         rate_list = np.arange(0.10, 0.21, 0.10)
         model_list = ["lstm"]
-        query_list = ["rs"]
+        query_list = ["kc"]
 
     data, csv_files = load_data(cfg, args.dataset, in_len=args.in_len, out_len=args.out_len, debug=args.debug)
 
@@ -268,7 +280,7 @@ if __name__ == "__main__":
 
     unlabeled_indices_first = deepcopy(train_index_list)
     labeled_indices_first = random.sample(unlabeled_indices_first, n_add)
-    unlabeled_indices_first = list(np.delete(unlabeled_indices_first, labeled_indices_first))
+    unlabeled_indices_first = [i for i in unlabeled_indices_first if i not in labeled_indices_first]
 
     for query in query_list:
         for model in model_list:
@@ -286,7 +298,7 @@ if __name__ == "__main__":
                 args.model = model
                 if model == "dol":
                     args.width = 64
-                ade_list_tmp = main(data, csv_files, args, cfg, labeled_indices, val_index_list, test_index_list)
+                ade_list_tmp = main(data, csv_files, query, args, cfg, labeled_indices, val_index_list, test_index_list)
                 ade_list.append(ade_list_tmp)
 
                 if query == "rs":
@@ -298,16 +310,18 @@ if __name__ == "__main__":
                         args=args,
                         cfg=cfg,
                         device=deviceDecision(),
-                        model_path=os.path.join(cfg.RESULT_PATH, "best_model.pth"),
-                        module_path=os.path.join(cfg.RESULT_PATH, "module.pth"),
+                        model_path=os.path.join("saved_model", "best_model.pth"),
+                        module_path=os.path.join("saved_model", "module.pth"),
                         data=data,
                         mean_list=mean_list,
                         std_list=std_list,
                         labeled_indices=labeled_indices,
                         unlabeled_indices=unlabeled_indices,
                     )
+                shutil.rmtree("saved_model")
 
-    print(np.array(ade_list).shape)
+    print(f"\n\nade_list shape: {np.array(ade_list).shape}")
+    print("all experiment finishied")
     np.save("al", np.array(ade_list))
 
     # df_LSTM = pd.DataFrame({f"{n_list[i]}": np.array(ade_list[i * len(model_list)]) for i in range(len(rate_list))})
